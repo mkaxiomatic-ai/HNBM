@@ -1,0 +1,3 @@
+This repository contains the source code of a paper submitted to **ITP 2026**. The formalization is built using **Lean 4 (v4.28.0-rc1)** and is compatible with **Mathlib** version `e318a59` (February 20, 2026). To explore or build the formalization, follow the steps below. The project requires **Lean 4**, **VS Code**, and **Mathlib**. For detailed installation instructions for your specific operating system, please visit the [Lean Community website](https://leanprover-community.github.io/get_started.html).
+
+The code is provided as a `.zip` file. Extract the contents and navigate to the project's root directory in your terminal. Run `lake build` to check that the project builds correctly.

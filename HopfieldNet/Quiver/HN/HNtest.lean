@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2025 Michail Karatarakis. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Michail Karatarakis
+-/
 import HopfieldNet.Quiver.HN.HNquivHebbian
 
 -- set_option linter.unusedVariables false

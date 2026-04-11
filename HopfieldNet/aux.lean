@@ -1,4 +1,8 @@
-
+/-
+Copyright (c) 2025 Michail Karatarakis. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Michail Karatarakis
+-/
 import Mathlib.Algebra.EuclideanDomain.Field
 import Mathlib.Algebra.Order.Star.Basic
 import Mathlib.LinearAlgebra.Matrix.Symmetric

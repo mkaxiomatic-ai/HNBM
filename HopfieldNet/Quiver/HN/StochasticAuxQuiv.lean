@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2025 Matteo Cipollina. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Matteo Cipollina
+-/
 import HopfieldNet.Quiver.HN.Core
 import Mathlib.Analysis.Normed.Ring.Basic
 import Mathlib.Analysis.Complex.Exponential

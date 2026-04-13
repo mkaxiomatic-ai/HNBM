@@ -1,5 +1,7 @@
 /-
-Anonymized for ITP2026
+Copyright (c) 2025 Fabio Anza. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Mitch Scheffer, Fabio Anza
 -/
 import Mathlib.Analysis.SpecialFunctions.Pow.Real -- for Real.rpow_def_of_pos
 

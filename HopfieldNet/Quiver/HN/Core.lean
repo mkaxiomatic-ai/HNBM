@@ -609,7 +609,10 @@ lemma NeuralNetwork.n_leq_n'_imp_sseq_n'_leq_sseq''  (s : State' wθ) (n k : ℕ
   seqStates' s useq (n + k) ≤ seqStates' s useq n := by
   induction k with
   | zero => simp only [Nat.add_zero]; apply le_refl
-  | succ k hk => rw [Nat.add_succ, seqStates', n_leq_n'_imp_sseq_n_k]; trans; apply update_le; exact hk
+  | succ k hk => rw [Nat.add_succ, seqStates', n_leq_n'_imp_sseq_n_k];
+                 apply le_trans
+                 · exact update_le (seqStates' s useq (n + k)) (u:= useq (n + k))
+                 · exact hk
 
 @[simp]
 lemma not_stable_u (s : (HopfieldNetwork R U).State) : ¬s.isStable wθ → ∃ u, (s.Up wθ u) ≠ s := by

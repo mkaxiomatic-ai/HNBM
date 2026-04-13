@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2025 Matteo Cipollina. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Matteo Cipollina
+-/
 import Mathlib.Order.CompletePartialOrder
 import Mathlib.Probability.Kernel.Invariance
 import Mathlib.Probability.ProbabilityMassFunction.Monad

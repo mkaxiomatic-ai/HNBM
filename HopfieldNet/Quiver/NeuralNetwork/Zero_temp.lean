@@ -9,7 +9,7 @@ import Mathlib.RingTheory.LocalRing.Basic
 import Mathlib.Topology.GDelta.MetrizableSpace
 import HopfieldNet.Quiver.NeuralNetwork.TwoState
 import HopfieldNet.TSAux
-import PhysLean.Thermodynamics.Temperature.Basic
+import Physlib.Thermodynamics.Temperature.Basic
 
 set_option linter.unusedSectionVars false
 set_option linter.unusedSimpArgs false
@@ -258,7 +258,7 @@ lemma tendsto_probPos_at_zero
     filter_upwards [self_mem_nhdsWithin] with T hTpos
     have hT0 : 0 ≤ T := le_of_lt hTpos
     have : (β ⟨Real.toNNReal T⟩ : ℝ) = 1 / (kB * T) := by
-      simp [Temperature.β, Temperature.toReal, Real.toNNReal_of_nonneg hT0, one_div]
+      simpa [Temperature.ofNNReal] using Temperature.beta_fun_T_formula T hTpos
     unfold probPos
     simp [this, logisticProb, mul_comm, mul_assoc, div_eq_mul_inv]
     simp_all only [Set.mem_Ioi, one_div, mul_inv_rev, map_sub, true_or, L]
@@ -288,11 +288,8 @@ lemma gibbsUpdate_apply_updPos
     exact_mod_cast hPos_le_one
   have hne := updPos_ne_updNeg (s:=s) (u:=u)
   have hcoe : (q : ℝ≥0∞) = ENNReal.ofReal pPos := by
-    simp [q, pPos, ENNReal.ofReal]
-    simp_all only [ne_eq, pPos, q]
-    ext : 1
-    simp_all only [NNReal.coe_mk, coe_toNNReal', left_eq_sup]
-    exact hPos_nonneg
+    simp [q]
+    exact (ENNReal.ofReal_eq_coe_nnreal hPos_nonneg).symm
   simp [q, hcoe, PMF.bernoulli_bind_pure_apply_left_of_ne (α:=NN.State) hq_le hne,
         pPos]
   grind
@@ -311,39 +308,19 @@ lemma gibbsUpdate_apply_updNeg
   have hq_le : q ≤ 1 := by
     exact_mod_cast hPos_le_one
   have hne := updPos_ne_updNeg (s:=s) (u:=u)
-  have hcoe : (q : ℝ≥0∞) = ENNReal.ofReal pPos := by
-    simp [q, pPos, ENNReal.ofReal]
-    simp_all only [ne_eq, pPos, q]
-    ext : 1
-    simp_all only [NNReal.coe_mk, coe_toNNReal', left_eq_sup]
-    exact hPos_nonneg
   have hEval :
       ((PMF.bernoulli q hq_le) >>= fun b =>
         if b then PMF.pure (updPos (s:=s) (u:=u)) else PMF.pure (updNeg (s:=s) (u:=u)))
         (updNeg (s:=s) (u:=u))
       = ((1 : ℝ≥0) - q : ℝ≥0) :=
     PMF.bernoulli_bind_pure_apply_right_of_ne (α:=NN.State) hq_le hne
-  have h_sub :
-      ((1 : ℝ≥0) - q : ℝ≥0) = ⟨1 - pPos, by
-        have : 0 ≤ 1 - pPos := sub_nonneg.mpr hPos_le_one
-        simpa [q] using this⟩ := by
-          simp_all only [ne_eq, not_false_eq_true, bernoulli_bind_pure_apply_right_of_ne,
-            ENNReal.coe_sub, ENNReal.coe_one, q, pPos]
-          simp_all only [q, pPos]
-          ext : 1
-          simp_all only [NNReal.coe_sub, NNReal.coe_one, NNReal.coe_mk]
-  have hENN :
-      ((1 : ℝ≥0) - (q : ℝ≥0) : ℝ≥0∞)
-        = ENNReal.ofReal (1 - pPos) := by
-    have h1 : 0 ≤ 1 - pPos := sub_nonneg.mpr hPos_le_one
-    simp [q, ENNReal.ofReal, pPos]
-    rfl
-  simp only [bind_apply, bernoulli_apply, tsum_fintype, Fintype.univ_bool, mem_singleton,
-    Bool.true_eq_false, not_false_eq_true, sum_insert, cond_true, pure_apply, mul_ite, mul_one,
-    mul_zero, sum_singleton, cond_false, ENNReal.coe_sub, ENNReal.coe_one, ↓reduceIte]
-  split
-  · grind
-  · aesop
+  have hsub : ENNReal.ofReal (1 - pPos) = 1 - (q : ENNReal) := by
+    have : (q : ENNReal) = ENNReal.ofReal pPos := by
+      simp [q]
+      exact (ENNReal.ofReal_eq_coe_nnreal hPos_nonneg).symm
+    simpa [this] using (ENNReal.ofReal_sub 1 hPos_nonneg)
+  simp [pPos, q, hEval, hsub]
+  grind
 
 /-- Eventual equality rewriting Gibbs mass at updPos along β → ∞ to ENNReal.ofReal (probPos at T). -/
 lemma eventually_eval_updPos_eq_ofReal_probPos

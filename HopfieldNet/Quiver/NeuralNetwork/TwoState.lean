@@ -8,7 +8,7 @@ import Mathlib.Analysis.Complex.Exponential
 import Mathlib.LinearAlgebra.Matrix.Symmetric
 import Mathlib.Probability.ProbabilityMassFunction.Constructions
 import HopfieldNet.Quiver.NeuralNetwork.Main
-import PhysLean.Thermodynamics.Temperature.Basic
+import Physlib.Thermodynamics.Temperature.Basic
 --import HopfieldNet.Quiver.NeuralNetwork.Main2
 
 
@@ -319,17 +319,28 @@ instance instTwoStateSymmetricBinary :
     exact (ne_of_lt hlt).symm
   θ0 := fun _ => fin0
   h_fact_pos := by
-    intro u ζcur net θ hle; simp [SymmetricBinary, hle]
+    intro u ζcur net θ hle
+    change (if θ.get fin0 ≤ net then (1 : R) else (-1 : R)) = 1
+    simp [hle]
   h_fact_neg := by
     intro u ζcur net θ hlt
+    change (if θ.get fin0 ≤ net then (1 : R) else (-1 : R)) = (-1 : R)
     have : ¬ θ.get fin0 ≤ net := not_le.mpr hlt
-    simp [SymmetricBinary, this]
+    simp [this]
   h_pact_pos := by left; rfl
   h_pact_neg := by right; rfl
   m_order := by
     have h0 : (0 : R) < 1 := zero_lt_one
     have hneg : (-1 : R) < 0 := by simp
     exact hneg.trans h0
+
+@[simp] lemma SymmetricBinary_ζ_pos :
+    @TwoStateNeuralNetwork.ζ_pos R U R _ _ _ (SymmetricBinary R U) instTwoStateSymmetricBinary = (1 : R) := rfl
+
+@[simp] lemma SymmetricBinary_ζ_neg :
+    @TwoStateNeuralNetwork.ζ_neg R U R _ _ _ (SymmetricBinary R U) instTwoStateSymmetricBinary = (-1 : R) := rfl
+
+@[simp] lemma SymmetricBinary_m (x : R) : (SymmetricBinary R U).m x = x := rfl
 
 instance instTwoStateSignum :
   TwoStateNeuralNetwork (SymmetricSignum R U) where
@@ -373,6 +384,14 @@ instance instTwoStateZeroOne :
     -- m = id, so goal is 0 < 1
     simp [ZeroOne, SymmetricBinary]
 
+@[simp] lemma ZeroOne_ζ_pos :
+    @TwoStateNeuralNetwork.ζ_pos R U R _ _ _ (ZeroOne R U) instTwoStateZeroOne = (1 : R) := rfl
+
+@[simp] lemma ZeroOne_ζ_neg :
+    @TwoStateNeuralNetwork.ζ_neg R U R _ _ _ (ZeroOne R U) instTwoStateZeroOne = (0 : R) := rfl
+
+@[simp] lemma ZeroOne_m (x : R) : (ZeroOne R U).m x = x := rfl
+
 /-- Scale between numeric embeddings of the two states (pushed along f). -/
 def scale
     {F} [FunLike F R ℝ]
@@ -397,14 +416,14 @@ def scaleS
     scale (R:=R) (U:=U) (ζ:=R) (NN:=SymmetricBinary R U) (f:=f) = f 2 := by
   -- ζ_pos = 1, ζ_neg = -1, m = id
   unfold scale
-  simp [instTwoStateSymmetricBinary, SymmetricBinary, sub_neg_eq_add, one_add_one_eq_two]
-  rw [@map_ofNat]
+  rw [SymmetricBinary_ζ_pos, SymmetricBinary_ζ_neg]
+  simp [SymmetricBinary_m, sub_neg_eq_add, one_add_one_eq_two, map_ofNat]
 
 @[simp] lemma scale_zeroOne (f : R →+* ℝ) :
     scale (R:=R) (U:=U) (ζ:=R) (NN:=ZeroOne R U) (f:=f) = f 1 := by
   -- ζ_pos = 1, ζ_neg = 0, m = id
   unfold scale
-  simp [instTwoStateZeroOne, ZeroOne, SymmetricBinary]
+  simp [ZeroOne_ζ_pos, ZeroOne_ζ_neg, ZeroOne_m, map_one, map_zero, sub_zero]
 
 /-- Logistic function used for Gibbs probabilities. -/
 noncomputable def logisticProb (x : ℝ) : ℝ := 1 / (1 + Real.exp (-x))
@@ -865,7 +884,9 @@ lemma updPos_eq_self_of_act_pos_binary
     updPos (NN:=SymmetricBinary ℝ U) s u = s := by
   ext v
   by_cases hv : v = u
-  · subst hv; simp [updPos, Function.update, h, instTwoStateSymmetricBinary]
+  · subst hv
+    simp only [updPos, Function.update, h]
+    split_ifs <;> rfl
   · simp [updPos, Function.update, hv]
 
 lemma updNeg_eq_self_of_act_neg_binary
@@ -874,7 +895,9 @@ lemma updNeg_eq_self_of_act_neg_binary
     updNeg (NN:=SymmetricBinary ℝ U) s u = s := by
   ext v
   by_cases hv : v = u
-  · subst hv; simp [updNeg, Function.update, h, instTwoStateSymmetricBinary]
+  · subst hv
+    simp only [updNeg, Function.update, h]
+    split_ifs <;> rfl
   · simp [updNeg, Function.update, hv]
 
 lemma Up_eq_updPos_or_updNeg_binary

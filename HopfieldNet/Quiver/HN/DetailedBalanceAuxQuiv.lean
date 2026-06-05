@@ -24,15 +24,8 @@ lemma sum_univ_eq_tsum_uniform  :
 by
   have h_nonzero : (1 : ℝ) / ↑(Fintype.card U) ≠ 0 :=
     by { apply div_ne_zero; norm_num; simp_all only [ne_eq, Nat.cast_eq_zero, Fintype.card_ne_zero, not_false_eq_true]}
-  have h_support : (Function.support (fun (u : U) => (1 : ℝ) / ↑(Fintype.card U))).Finite := by
-    rw [Function.support_const]
-    exact Set.finite_univ
-    exact h_nonzero
-  have h_summable : Summable (fun (u : U) => (1 : ℝ) / ↑(Fintype.card U)) := by
-    apply summable_of_finite_support
-    · rw [Function.support_const]
-      exact Set.finite_univ
-      exact h_nonzero
+  have h_summable : Summable (fun (u : U) => (1 : ℝ) / ↑(Fintype.card U)) :=
+    Summable.of_finite
   have h_tsum_eq_sum : ∑' (u : U), (1 : ℝ) / ↑(Fintype.card U) = ∑ (u : U), (1 : ℝ) / ↑(Fintype.card U) := by
     simp_all only [one_div, ne_eq, inv_eq_zero, Nat.cast_eq_zero, Fintype.card_ne_zero, not_false_eq_true,
       Function.support_inv, tsum_const, Nat.card_eq_fintype_card, nsmul_eq_mul, mul_inv_cancel₀, sum_const, card_univ]
@@ -243,7 +236,7 @@ lemma bias_energy_single_site_diff
   s'.Eθ wθ - s.Eθ wθ = θ' (wθ.θ u) * (s'.act u - s.act u) := by
   unfold NeuralNetwork.State.Eθ
   rw [← Finset.sum_sub_distrib]
-  rw [Finset.sum_eq_add_sum_diff_singleton (Finset.mem_univ u)]
+  rw [Finset.sum_eq_add_sum_diff_singleton_of_mem (Finset.mem_univ u)]
   have h_sum_zero : ∑ v ∈ Finset.univ.erase u, (θ' (wθ.θ v) * s'.act v - θ' (wθ.θ v) * s.act v) = 0 := by
     apply Finset.sum_eq_zero
     intro v hv

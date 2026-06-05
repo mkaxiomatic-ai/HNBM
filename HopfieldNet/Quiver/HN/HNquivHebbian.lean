@@ -34,16 +34,15 @@ def Hebbian {m : ℕ} (ps : Fin m → (HopfieldNetwork R U).State) : Params (Hop
     trivial
   /- A proof that the weight matrix is symmetric and satisfies the Hebbian learning rule. -/
   hw u v huv := by
-    simp only [sub_apply, smul_apply, smul_eq_mul]
-    rw [Finset.sum_apply, Finset.sum_apply]
+    simp only [sub_apply, smul_apply, smul_eq_mul, Matrix.sum_apply, one_apply]
     have : ∀ k i, (ps k).act i * (ps k).act i = 1 := by
       intros k i ; rw [mul_self_eq_one_iff.mpr]; exact act_one_or_neg_one i
     have huv' : u = v :=
       HopfieldNetwork.eq_of_not_pwMat (R := R) (U := U) u v huv
     subst huv'
     conv => enter [1, 1, 2];
-    simp only [this, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one, one_apply_eq,
-      sub_self]
+    simp only [this, sum_const, card_univ, nsmul_eq_mul, mul_one, Matrix.one_apply, ite_true]
+    simp [Fintype.card_fin, sub_self]
   hw' := by
     simp only [Matrix.IsSymm,transpose_sub, transpose_smul, transpose_one, sub_left_inj]
     rw [isSymm_sum]
@@ -57,9 +56,8 @@ lemma patterns_pairwise_orthogonal {m : ℕ}  (ps : Fin m → (HopfieldNetwork R
   intros k
   ext t
   rw [Hebbian, mulVec, dotProduct]
-  simp only [sub_apply, smul_apply, smul_eq_mul, Pi.natCast_def, Pi.mul_apply, Pi.sub_apply]
-  rw [Finset.sum_apply]
-  simp only [Finset.sum_apply]
+  simp only [sub_apply, smul_apply, smul_eq_mul, Pi.natCast_def, Pi.mul_apply, Pi.sub_apply,
+    Matrix.sum_apply]
   unfold dotProduct at horth
   have : ∀ i j, (dotProduct (ps i).act (ps j).act) = if i ≠ j then 0 else card U := fun i j ↦ by
     by_cases h : i ≠ j
@@ -156,7 +154,7 @@ theorem outerProduct_sum_mulVec_apply {m : ℕ} (ps : Fin m → (HopfieldNetwork
     rw [← this]
     simp only [mul_eq_mul_right_iff]
     left
-    rw [Finset.sum_apply];rw [Finset.sum_apply]
+    rw [Matrix.sum_apply t x]
   · refine Finset.sum_congr rfl (fun i _ ↦ ?_)
     simpa [dotProduct, mul_assoc] using (mul_sum (s := (Finset.univ : Finset U))
       (f := fun x : U ↦ (ps i).act x * pj x) (a := (ps i).act t)).symm

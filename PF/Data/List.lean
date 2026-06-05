@@ -37,11 +37,11 @@ lemma dropLast_append_singleton {l : List α} {a : α} (h : l.length > 0) :
   | nil => simp at h
   | cons hd tl ih =>
     cases tl with
-    | nil => simp only [concat_eq_append, cons_append, nil_append, dropLast_cons₂,
+    | nil => simp only [concat_eq_append, cons_append, nil_append, dropLast_cons_cons,
       dropLast_singleton]
     | cons tl_hd tl_tl => simp_all only [List.length_cons, gt_iff_lt, lt_add_iff_pos_left,
       add_pos_iff, Nat.lt_one_iff, pos_of_gt, or_true, _root_.List.concat_eq_append, List.cons_append, forall_const,
-      Nat.ofNat_pos, List.dropLast_cons₂]
+      Nat.ofNat_pos, List.dropLast_cons_cons]
 
 lemma length_pos_of_append_singleton (l : List α) (a : α) : (l ++ [a]).length > 0 := by
   simp only [length_append, length_cons, length_nil, zero_add, gt_iff_lt, lt_add_iff_pos_left,
@@ -60,11 +60,6 @@ lemma exists_mem_split {l : List α} {x : α} (h : x ∈ l) :
     · rcases ih h' with ⟨l₁, l₂, rfl⟩
       use y :: l₁, l₂
       simp only [List.cons_append]
-
-lemma dropLast_cons_cons (a b : α) (l : List α) : (a :: b :: l).dropLast = a :: (b :: l).dropLast := by
-  have h : (a :: b :: l).length > 0 := by simp only [List.length_cons, gt_iff_lt,
-    lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos, or_true]
-  rw [@List.dropLast_cons₂]
 
 lemma append_left_cancel {l₁ l₂ l₃ : List α} (h_len : l₁.length = l₂.length)
     (h : l₁ ++ l₃ = l₂ ++ l₃) : l₁ = l₂ := by
@@ -180,6 +175,11 @@ lemma mem_tail_of_count_ge_two [DecidableEq α] {x : α} {l : List α}
         have h_pos : 0 < tl.count x := by linarith
         have : x ∈ tl := (List.count_pos_iff).1 h_pos
         simpa using this
+
+omit [DecidableEq α] in
+lemma get_eq_get_dropLast {l : List α} {i : Nat} (hi : i < l.length - 1) :
+    l.get ⟨i, Nat.lt_of_lt_pred hi⟩ = l.dropLast.get ⟨i, by rw [List.length_dropLast]; omega⟩ := by
+  simp [List.get_eq_getElem, List.dropLast_eq_take, List.getElem_take]
 
 namespace Nat
 @[simp] lemma eq_of_le_zero {n : ℕ} (h : n ≤ 0) : n = 0 :=
@@ -437,6 +437,42 @@ lemma get_idxOf_of_mem {l : List α} {x : α} (h : x ∈ l) :
           simp only [get_eq_getElem]
           apply getElem_cons_succ
         exact Eq.trans helper (Eq.trans h_getElem ih')
+
+omit [DecidableEq α] in
+/-- A duplicate in `dropLast` occurs at a positive index. -/
+lemma exists_pos_get_of_dropLast_count_ge_two [DecidableEq α] {l : List α} {x : α}
+    (h : 2 ≤ l.dropLast.count x) :
+    ∃ (i : Nat) (hi : i < l.length), 0 < i ∧ i < l.length - 1 ∧ l.get ⟨i, hi⟩ = x := by
+  have hx_tail := mem_tail_of_count_ge_two h
+  have hlen : 2 ≤ l.length := by
+    have := Nat.le_trans h List.count_le_length
+    rw [List.length_dropLast] at this
+    omega
+  match l with
+  | [] | [_] => simp [List.length_dropLast] at hlen
+  | y :: z :: tl =>
+    have hx_mem : x ∈ (z :: tl).dropLast := by
+      simpa [List.dropLast_cons_cons, List.tail_cons] using hx_tail
+    let i := (z :: tl).dropLast.idxOf x + 1
+    have hidx : (z :: tl).dropLast.idxOf x < (z :: tl).dropLast.length :=
+      List.idxOf_lt_length_of_mem hx_mem
+    have hdl : (z :: tl).dropLast.length = tl.length := by
+      simp only [List.length_cons, List.length_dropLast]
+      omega
+    have hi_pred : i < (y :: z :: tl).length - 1 := by
+      dsimp [i, List.length_cons]
+      rw [hdl] at hidx
+      exact Nat.succ_lt_succ hidx
+    have hi_lt_len : i < (y :: z :: tl).length := Nat.lt_of_lt_pred hi_pred
+    have hi_z : (z :: tl).dropLast.idxOf x < (z :: tl).length - 1 := by
+      have h1 : (z :: tl).length - 1 = (z :: tl).dropLast.length := by
+        rw [List.length_dropLast, List.length_cons]
+      rw [h1]
+      exact hidx
+    have hi_get : (y :: z :: tl).get ⟨i, hi_lt_len⟩ = x := by
+      dsimp only [i]
+      rw [List.get_cons_succ, get_eq_get_dropLast hi_z, get_idxOf_of_mem hx_mem]
+    exact ⟨i, hi_lt_len, Nat.succ_pos _, hi_pred, hi_get⟩
 
 omit [DecidableEq α] in
 /-- If `l.get i = x`, then `idxOf x l ≤ i.val`. -/

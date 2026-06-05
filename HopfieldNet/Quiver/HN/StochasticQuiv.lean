@@ -46,12 +46,11 @@ noncomputable def NN.State.gibbsUpdateNeuron [Coe R ℝ] (T : ℝ) (u : U) : PMF
   let p_flip_le_one : p_flip ≤ 1 := by
     simp only [p_flip]
     let a := ENNReal.ofReal (Real.exp (-(↑ΔE) / T))
-    have h_a_nonneg : 0 ≤ a := zero_le a
+    have h_a_nonneg : 0 ≤ a := bot_le
     have h_denom_ne_zero : 1 + a ≠ 0 := by
       intro h
-      have h1 : 0 ≤ 1 + a := zero_le (1 + a)
       have h2 : 1 + a = 0 := h
-      simp_all only [zero_le, add_eq_zero, one_ne_zero, ENNReal.ofReal_eq_zero, false_and, a, ΔE,
+      simp_all only [add_eq_zero, one_ne_zero, ENNReal.ofReal_eq_zero, false_and, a, ΔE,
         h_u]
     have h_sum_ne_top : (1 + a) ≠ ⊤ := by
       apply ENNReal.add_ne_top.2
@@ -146,10 +145,9 @@ noncomputable def patternStochasticUpdate
         rw [h_eq]
         exact h_diag_zero v
       else
-        have h_adj : (HopfieldNetwork ℝ (Fin n)).Hom u v := by
-          simp only; simp only [ne_eq]
-          exact { down := h_eq }
-        aesop
+        exfalso
+        have hu : u ≠ v := h_eq
+        exact h ⟨PLift.up hu, trivial⟩
     hw' := by
       exact IsSymm.ext_iff.mpr fun i j ↦ h_sym j i
     σ := fun u => Vector.mk (Array.replicate

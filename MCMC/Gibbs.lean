@@ -302,4 +302,3 @@ theorem symmetrizedKernel_is_hermitian_of_reversible
   -- For real matrices, IsHermitian is equivalent to being symmetric (Aᵀ = A).
   sorry
 -/
-end MCMC.

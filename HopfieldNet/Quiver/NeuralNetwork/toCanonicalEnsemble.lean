@@ -3,7 +3,7 @@ Copyright (c) 2025 Matteo Cipollina. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Matteo Cipollina
 -/
-import PhysLean.StatisticalMechanics.CanonicalEnsemble.Finite
+import Physlib.StatisticalMechanics.CanonicalEnsemble.Finite
 import HopfieldNet.Quiver.NeuralNetwork.TwoState
 
 set_option linter.unusedSectionVars false

@@ -197,7 +197,7 @@ lemma ENNReal.sum_pos {α : Type*} (s : Finset α) (f : α → ENNReal)
     (h_nonempty : s.Nonempty) (h_pos : ∀ i ∈ s, 0 < f i) : 0 < ∑ i ∈ s, f i := by
   rcases h_nonempty with ⟨i, hi⟩
   have h_pos_i : 0 < f i := h_pos i hi
-  have h_le : f i ≤ ∑ j ∈ s, f j := Finset.single_le_sum (fun j _ => zero_le (f j)) hi
+  have h_le : f i ≤ ∑ j ∈ s, f j := Finset.single_le_sum (fun j _ => bot_le) hi
   exact lt_of_lt_of_le h_pos_i h_le
 
 /-- The Boltzmann partition function is positive and finite -/

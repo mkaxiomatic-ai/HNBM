@@ -214,7 +214,7 @@ lemma filter_sum_pos_iff_exists_pos {α β : Type} [Fintype α]
         apply le_antisymm
         · push_neg at h
           exact h a ha
-        · exact zero_le (p a)
+        · exact bot_le
       have sum_zero := Finset.sum_eq_zero all_zero
       aesop
       --exact not_lt_of_le (by exact nonpos_iff_eq_zero.mpr sum_zero) h_pos

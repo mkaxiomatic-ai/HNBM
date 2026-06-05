@@ -45,7 +45,7 @@ noncomputable abbrev mulVec_continuousLinearMap (A : Matrix n n ℝ) : (n → �
     [Giaquinta-Modica, Theorem 6.3, cite: 230] -/
 private lemma IsCompact_stdSimplex : IsCompact (stdSimplex ℝ n) := by
   -- stdSimplex is a closed and bounded subset of ℝⁿ
-  exact _root_.isCompact_stdSimplex n
+  exact _root_.isCompact_stdSimplex (𝕜 := ℝ) (ι := n)
 
 namespace CollatzWielandt
 
@@ -115,7 +115,7 @@ noncomputable def r (A : Matrix n n ℝ) [Fintype n] := ⨆ x ∈ P_set, collatz
     [Giaquinta-Modica, Theorem 6.24 (dual), p: 235] -/
 theorem exists_maximizer [Nonempty n] (A : Matrix n n ℝ) :
     ∃ v ∈ stdSimplex ℝ n, IsMaxOn (collatzWielandtFn A) (stdSimplex ℝ n) v :=
-  IsCompact.exists_max_on_usco (_root_.isCompact_stdSimplex n)
+  IsCompact.exists_max_on_usco IsCompact_stdSimplex
   stdSimplex_nonempty (upperSemicontinuousOn A)
 
 lemma eq_iInf_of_nonempty (A : Matrix n n ℝ) (v : n → ℝ) (h : {i | 0 < v i}.toFinset.Nonempty) :

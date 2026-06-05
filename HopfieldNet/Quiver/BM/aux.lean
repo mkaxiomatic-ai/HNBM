@@ -8,7 +8,7 @@ import HopfieldNet.TSAux
 import HopfieldNet.Quiver.NeuralNetwork.toCanonicalEnsemble
 import MCMC.DetailedBalanceGen
 import Mathlib.Probability.Kernel.Composition.Prod
-import PhysLean.StatisticalMechanics.CanonicalEnsemble.Finite
+import Physlib.StatisticalMechanics.CanonicalEnsemble.Finite
 
 /-! Concrete Hopfield Energy and Fintype Instances
 -/

@@ -8,7 +8,7 @@ import HopfieldNet.TSAux
 import HopfieldNet.Quiver.NeuralNetwork.toCanonicalEnsemble
 import MCMC.DetailedBalanceGen
 import Mathlib.Probability.Kernel.Composition.Prod
-import PhysLean.StatisticalMechanics.CanonicalEnsemble.Finite
+import Physlib.StatisticalMechanics.CanonicalEnsemble.Finite
 
 /-! Concrete Hopfield Energy and Fintype Instances
 -/
@@ -414,9 +414,10 @@ lemma hamiltonian_flip_relation (p : Params (SymmetricBinary R U)) (s : (Symmetr
       ext v
       by_cases hv : v = u
       · subst hv
-        simp [sPos, sNeg, updPos, updNeg,
-              TwoState.SymmetricBinary, instTwoStateSymmetricBinary,
-              Pi.single, sub_eq_add_neg, one_add_one_eq_two]
+        simp only [sPos, sNeg, Pi.single_eq_same, Pi.sub_apply]
+        rw [updPos_act_at_u (NN:=SymmetricBinary R U) (s:=s) (u:=v),
+            updNeg_act_at_u (NN:=SymmetricBinary R U) (s:=s) (u:=v)]
+        simp [TwoState.SymmetricBinary_ζ_pos, TwoState.SymmetricBinary_ζ_neg, sub_eq_add_neg, one_add_one_eq_two]
       · simp [sPos, sNeg, updPos, updNeg, Pi.single, hv, sub_eq_add_neg]
     rw [h_diff_vec, dotProduct_single]
     simp [mul_comm]

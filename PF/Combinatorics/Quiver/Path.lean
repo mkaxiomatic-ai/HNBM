@@ -613,6 +613,10 @@ lemma isSimple_of_isStrictlySimple {a b : V} {p : Path a b} (h : IsStrictlySimpl
   unfold IsSimple IsStrictlySimple at *
   simpa using h.sublist (List.dropLast_sublist (l := p.vertices))
 
+lemma not_isStrictlySimple_of_not_isSimple {a b : V} {p : Path a b} (h : ¬IsSimple p) : ¬IsStrictlySimple p := by
+  intro h_strict
+  exact h (isSimple_of_isStrictlySimple h_strict)
+
 /-!
 # Acyclic Quivers
 
@@ -794,9 +798,105 @@ lemma removing_cycle_gives_shorter_path [DecidableEq V] {a v : V} {s : Path a a}
   simp_all only [le_refl, gt_iff_lt, length_comp, comp_assoc, add_lt_add_iff_right,
     lt_add_iff_pos_right, Nat.eq_of_le_zero]
 
-/-
-/-- A shortest positive loop is strictly simple. -/
-theorem shortest_positive_loop_is_strictly_simple {a : V} :
-    ∀ (c : Path a a), c.length > 0 → (∀ p' : Path a a, p'.length > 0 → c.length ≤ p'.length) →
-    c.IsStrictlySimple := by sorry
--/
+
+/-- A shortest positive loop is simple. -/
+theorem shortest_positive_loop_is_simple [DecidableEq V] {a : V} {c : Path a a}
+    (hc_pos : c.length > 0)
+    (hc_min : ∀ p' : Path a a, p'.length > 0 → c.length ≤ p'.length) :
+    c.IsSimple := by
+  by_contra h_not_simple
+  have h_not_strict : ¬IsStrictlySimple c := not_isStrictlySimple_of_not_isSimple h_not_simple
+  obtain ⟨v, p₁, p₂, hv_in_drop, hp_split, hv_not_tail⟩ :=
+    repeated_vertex_in_prefix_dropLast c h_not_strict
+  obtain ⟨q, c_cycle, hp₁_split, hv_not_in_q⟩ := extract_cycle_from_prefix hv_in_drop
+  have hc_cycle_pos : c_cycle.length > 0 :=
+    extracted_cycle_has_positive_length hp₁_split hv_in_drop hv_not_in_q
+  have hp_comp : c = (q.comp c_cycle).comp p₂ := by
+    rw [hp_split, hp₁_split, comp_assoc]
+  have h_shorter : (q.comp p₂).length < c.length :=
+    removing_cycle_gives_shorter_path hp_comp hc_cycle_pos
+  have hq_pos : (q.comp p₂).length > 0 := by
+    by_contra hq_zero
+    have hq_eq : (q.comp p₂).length = 0 := Nat.eq_zero_of_le_zero (le_of_not_gt hq_zero)
+    have hlen : q.length + p₂.length = 0 := by rw [← length_comp, hq_eq]
+    have hq_len : q.length = 0 := (Nat.add_eq_zero_iff.mp hlen).1
+    have hp₂_len : p₂.length = 0 := (Nat.add_eq_zero_iff.mp hlen).2
+    cases q with
+    | nil =>
+      cases p₂ with
+      | nil =>
+        have hc_eq : c = c_cycle := by simpa [comp_nil] using hp_comp
+        have h_not_simple' : ¬IsSimple c_cycle := hc_eq ▸ h_not_simple
+        have h_dup : ∃ x, 2 ≤ (c_cycle.vertices.dropLast).count x := by
+          simpa [IsSimple, List.nodup_iff_not_contains_dup, List.ContainsDup] using h_not_simple'
+        obtain ⟨xdup, hx_count⟩ := h_dup
+        obtain ⟨i, hi_lt, hi_pos, hi_pred, hi_get⟩ :=
+          exists_pos_get_of_dropLast_count_ge_two hx_count
+        by_cases hx : xdup = a
+        · obtain ⟨w, p_short, _p_rest, _h_split, h_len, hw_eq⟩ :=
+            split_at_vertex c_cycle i hi_lt
+          have ha_eq : w = a := hw_eq.trans (hi_get.trans hx)
+          subst ha_eq
+          have h_short_pos : p_short.length > 0 := by rw [h_len]; exact hi_pos
+          have h_short_lt : p_short.length < c.length := by
+            rw [h_len, hc_eq]
+            have := vertices_length c_cycle
+            omega
+          exact (Nat.lt_le_antisymm h_short_lt (hc_min p_short h_short_pos)).elim
+        · have hx_in_drop : xdup ∈ c_cycle.vertices.dropLast :=
+            List.count_pos_iff.mp (Nat.lt_of_lt_of_le (by decide : 0 < 2) hx_count)
+          obtain ⟨p₁x, p₂x, hcompx, hx_not_tail⟩ :=
+            exists_decomp_of_mem_vertices_prop c_cycle (List.mem_of_mem_dropLast hx_in_drop)
+          have h_p2_count : p₂x.vertices.count xdup = 1 := by
+            cases hv : p₂x.vertices with
+            | nil => exact (vertices_nonempty p₂x hv).elim
+            | cons hd tl =>
+              have h_hd : hd = xdup := Option.some_inj.mp (by
+                simpa [hv] using show p₂x.vertices.head? = some xdup by
+                  cases p₂x with
+                  | nil => rfl
+                  | cons p' e => simp [vertices_cons, List.concat_eq_append, vertices_head?])
+              rw [h_hd] at hv ⊢
+              have h_tl : xdup ∉ tl := fun h_in => hx_not_tail (by rw [hv, List.tail_cons]; exact h_in)
+              simp [List.count_cons_self, List.count_eq_zero.mpr h_tl]
+          have hx_in_p1 : xdup ∈ p₁x.vertices.dropLast := by
+            have hvert : c_cycle.vertices = c_cycle.vertices.dropLast ++ [a] := by
+              cases c_cycle with
+              | nil => simp at hc_cycle_pos
+              | cons p e =>
+                simp [vertices_cons, List.dropLast_concat, List.concat_eq_append]
+            have h_full : 2 ≤ c_cycle.vertices.count xdup := by
+              rw [hvert, List.count_append, List.count_singleton]
+              have hxa : (a == xdup) = false := _root_.beq_eq_false_iff_ne.mpr (Ne.symm hx)
+              simp [hxa]
+              exact hx_count
+            have hcount : 1 ≤ (p₁x.vertices.dropLast).count xdup := by
+              have h_eq : c_cycle.vertices.count xdup =
+                  (p₁x.vertices.dropLast ++ p₂x.vertices).count xdup := by
+                rw [hcompx, vertices_comp]
+              rw [h_eq, List.count_append, h_p2_count] at h_full
+              omega
+            exact List.count_pos_iff.mp (Nat.lt_of_lt_of_le (by decide : 0 < 1) hcount)
+          obtain ⟨q_x, c_x, hsplit1, hx_not⟩ := extract_cycle_from_prefix (p₁ := p₁x) hx_in_p1
+          have hc_x_pos : c_x.length > 0 :=
+            extracted_cycle_has_positive_length hsplit1 hx_in_p1 hx_not
+          have hcomp' : c_cycle = (q_x.comp c_x).comp p₂x := by
+            rw [hcompx, hsplit1, comp_assoc]
+          have h_shorter_x : (q_x.comp p₂x).length < c.length := by
+            rw [hc_eq]
+            exact removing_cycle_gives_shorter_path hcomp' hc_x_pos
+          have hq_x_pos : (q_x.comp p₂x).length > 0 := by
+            by_contra hzero
+            have hlen' : q_x.length + p₂x.length = 0 := by
+              rw [← length_comp, Nat.eq_zero_of_le_zero (le_of_not_gt hzero)]
+            cases q_x with
+            | nil =>
+              cases p₂x with
+              | nil =>
+                exact absurd rfl hx
+              | cons _ _ => simp [length_cons] at hlen'
+            | cons _ _ => simp [length_cons] at hlen'
+          exact (Nat.lt_le_antisymm h_shorter_x (hc_min _ hq_x_pos)).elim
+      | cons _ _ => simp [length_cons] at hp₂_len
+    | cons _ _ => simp [length_cons] at hq_len
+  exact (Nat.lt_le_antisymm h_shorter (hc_min _ hq_pos)).elim

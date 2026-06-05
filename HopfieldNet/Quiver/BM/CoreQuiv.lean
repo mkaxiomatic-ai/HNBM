@@ -164,15 +164,9 @@ Returns a probability mass function over the possible next states.
 -/
 noncomputable def gibbsUpdateSingleNeuron (p : ParamsBM R U)
   (s : StateBM R U) (u : U) : PMF (StateBM R U) :=
-  have h_prob_ennreal_le_one : ENNReal.ofReal (probNeuronIsOne p s u) ≤ 1 :=
-    ENNReal.ofReal_le_one.mpr (probNeuronIsOne_le_one p s u)
-  PMF.bernoulli (by {
-    constructor
-    cases' ENNReal.ofReal (probNeuronIsOne p s u) with h h2
-    aesop
-    aesop
-  }) (by {simp only [NNReal.mk_zero, zero_le]
-  })>>= fun takes_value_one =>
+  PMF.bernoulli
+    (⟨probNeuronIsOne p s u, probNeuronIsOne_nonneg p s u⟩)
+    (mod_cast probNeuronIsOne_le_one p s u) >>= fun takes_value_one =>
     let new_val : R := if takes_value_one then (1 : R) else (-1 : R)
     PMF.pure
       { act := fun v => if v = u then new_val else s.act v

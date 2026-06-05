@@ -22,6 +22,5 @@ def NN.State.metropolisDecision (p : ℝ) : PMF Bool := by
     ⟨min (max p 0) 1, by
       exact le_min (le_max_right _ _) (by simpa using (show (0 : ℝ) ≤ (1 : ℝ) from zero_le_one))⟩
   refine PMF.bernoulli q ?_
-  -- `q ≤ 1` (in `NNReal`) reduces to the corresponding real inequality.
-  change (q : ℝ) ≤ (1 : ℝ)
-  simpa [q] using (min_le_right (max p 0) (1 : ℝ))
+  show q ≤ 1
+  exact min_le_right (max p 0) 1

@@ -224,20 +224,20 @@ lemma measure_eq_sum_finset
     [DecidableEq α] [MeasurableSpace α] [MeasurableSpace β] [MeasurableSingletonClass α]
     (κ : Kernel β α) (x : β) {B : Set α} (hB : B.Finite) :
     κ x B = ∑ y ∈ hB.toFinset, κ x {y} := by
-  have hBset : B = (hB.toFinset : Finset α).toSet := by
+  have hBset : B = (hB.toFinset : Set α) := by
     ext a; aesop
   set s : Finset α := hB.toFinset
-  suffices H : κ x s.toSet = ∑ y ∈ s, κ x {y} by aesop
+  suffices H : κ x (s : Set α) = ∑ y ∈ s, κ x {y} by aesop
   refine s.induction_on ?h0 ?hstep
   · simp
   · intro a s ha_notin hIH
-    have hDisj : Disjoint ({a} : Set α) s.toSet := by
+    have hDisj : Disjoint ({a} : Set α) (s : Set α) := by
       refine disjoint_left.mpr ?_
       intro y hy_in hy_in_s
       have : y = a := by simpa using hy_in
       subst this
       aesop
-    have hMeas_s : MeasurableSet s.toSet := by
+    have hMeas_s : MeasurableSet (s : Set α) := by
       refine s.induction_on ?m0 ?mstep
       · simp
       · intro b t hb_notin ht
@@ -245,14 +245,14 @@ lemma measure_eq_sum_finset
                Set.union_assoc] using (ht.union (measurableSet_singleton b))
     have hMeas_a : MeasurableSet ({a} : Set α) := measurableSet_singleton a
     have hUnion :
-        (insert a s).toSet
-          = ({a} : Set α) ∪ s.toSet := by
+        ((insert a s : Finset α) : Set α)
+          = ({a} : Set α) ∪ (s : Set α) := by
       ext y; by_cases hy : y = a
       · subst hy; simp
       · simp [hy]
     have hAdd :
-        κ x ((insert a s).toSet)
-          = κ x ({a} : Set α) + κ x s.toSet := by
+        κ x ((insert a s : Finset α) : Set α)
+          = κ x ({a} : Set α) + κ x (s : Set α) := by
       rw [← measure_union_add_inter {a} hMeas_s]
       simp_rw [hUnion, measure_union_add_inter {a} hMeas_s]
       exact measure_union hDisj hMeas_s
@@ -261,8 +261,8 @@ lemma measure_eq_sum_finset
           = κ x ({a} : Set α) + ∑ y ∈ s, κ x {y} := by
       simp [Finset.sum_insert, ha_notin]
     calc
-      κ x ((insert a s).toSet)
-          = κ x ({a} : Set α) + κ x s.toSet := hAdd
+      κ x ((insert a s : Finset α) : Set α)
+          = κ x ({a} : Set α) + κ x (s : Set α) := hAdd
       _ = κ x ({a} : Set α) + ∑ y ∈ s, κ x {y} := by rw [hIH]
       _ = ∑ y ∈ insert a s, κ x {y} := by simp [hSum]
 

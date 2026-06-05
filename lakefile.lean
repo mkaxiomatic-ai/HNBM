@@ -29,13 +29,14 @@ lean_lib «NeuralNetwork» where
 
 --lean_lib Optlib where
 
-lean_lib PhysLean where
+require «physlib» from git
+  "https://github.com/leanprover-community/physlib.git"
 
 require checkdecls from git "https://github.com/PatrickMassot/checkdecls.git"
 
 --meta if get_config? env = some "dev" then
 require «doc-gen4» from git
-  "https://github.com/leanprover/doc-gen4" @ "main"
+  "https://github.com/leanprover/doc-gen4" @ "v4.30.0"
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.30.0"

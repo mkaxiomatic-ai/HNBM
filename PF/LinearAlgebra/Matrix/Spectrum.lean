@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Matteo Cipollina
 -/
 import Mathlib.Algebra.Lie.OfAssociative
+import Mathlib.Analysis.Convex.StdSimplex
 import Mathlib.Analysis.InnerProductSpace.Basic
 import Mathlib.Analysis.Normed.Algebra.Spectrum
 import Mathlib.Analysis.RCLike.Lemmas
@@ -33,11 +34,11 @@ lemma stdSimplex_nonempty [Nonempty n] : (stdSimplex ℝ n).Nonempty :=
 
 omit [DecidableEq n] in
 lemma isCompact_stdSimplex : IsCompact (stdSimplex ℝ n) :=
-  _root_.isCompact_stdSimplex n
+  _root_.isCompact_stdSimplex (𝕜 := ℝ) (ι := n)
 
 omit [DecidableEq n] in
 lemma convex_stdSimplex : Convex ℝ (stdSimplex ℝ n) :=
-  _root_.convex_stdSimplex ℝ n
+  _root_.convex_stdSimplex (𝕜 := ℝ) (ι := n)
 
 /-!
 ## Spectral Properties of Matrices

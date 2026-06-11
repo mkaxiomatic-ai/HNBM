@@ -44,6 +44,42 @@ private lemma kernel_eval_singleton
     simp [Set.indicator_of_notMem, hb]
   · simp
 
+omit [DecidableEq n] in
+/-- Row-stochastic matrix multiplication matches kernel composition (apply `P`, then `Q`). -/
+lemma matrixToKernel_comp_singleton {P Q : Matrix n n ℝ} (hP : IsStochastic P) (hQ : IsStochastic Q)
+    (i j : n) :
+    ((matrixToKernel Q hQ) ∘ₖ (matrixToKernel P hP)) i {j} =
+      ENNReal.ofReal ((P * Q) i j) := by
+  have hj : MeasurableSet ({j} : Set n) := measurableSet_singleton j
+  calc
+    ((matrixToKernel Q hQ) ∘ₖ (matrixToKernel P hP)) i {j}
+        = ∫⁻ b, (matrixToKernel Q hQ) b {j} ∂(matrixToKernel P hP) i := by
+          rw [Kernel.comp_apply' (η := matrixToKernel Q hQ) (κ := matrixToKernel P hP) (a := i) (hs := hj)]
+    _ = ∑ b : n, (matrixToKernel P hP) i {b} * (matrixToKernel Q hQ) b {j} := by
+          have hrow :
+              (matrixToKernel P hP) i =
+                ∑ b : n, ENNReal.ofReal (P i b) • Measure.dirac b := by
+            dsimp [matrixToKernel]
+            rfl
+          calc
+            ∫⁻ b, (matrixToKernel Q hQ) b {j} ∂(matrixToKernel P hP) i
+                = ∫⁻ b, (matrixToKernel Q hQ) b {j}
+                    ∂(∑ b : n, ENNReal.ofReal (P i b) • Measure.dirac b) := by rw [hrow]
+            _ = ∑ b : n, ENNReal.ofReal (P i b) * (matrixToKernel Q hQ) b {j} := by
+                  simp [MeasureTheory.lintegral_finsetSum, MeasureTheory.lintegral_dirac]
+            _ = ∑ b : n, (matrixToKernel P hP) i {b} * (matrixToKernel Q hQ) b {j} := by
+                  refine Finset.sum_congr rfl fun b _ => ?_
+                  rw [← kernel_eval_singleton]
+    _ = ∑ b : n, ENNReal.ofReal (P i b) * ENNReal.ofReal (Q b j) := by
+          simp [kernel_eval_singleton]
+    _ = ENNReal.ofReal (∑ b : n, P i b * Q b j) := by
+          have hnn : ∀ b ∈ (Finset.univ : Finset n), 0 ≤ P i b * Q b j := by
+            intro b _
+            exact mul_nonneg (hP.1 i b) (hQ.1 b j)
+          refine (Finset.sum_congr rfl fun b _ => ?_).trans (ENNReal.ofReal_sum_of_nonneg hnn).symm
+          simp [ENNReal.ofReal_mul, hP.1, hQ.1]
+    _ = ENNReal.ofReal ((P * Q) i j) := by simp [Matrix.mul_apply]
+
 open scoped ENNReal
 
 omit [DecidableEq n] in

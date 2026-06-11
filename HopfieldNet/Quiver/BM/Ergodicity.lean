@@ -383,6 +383,80 @@ lemma RScol_pos_of_diffOnly
     exact this
   simpa [RScol] using hcol_pos
 
+/-- Single-site Gibbs flip probability is strictly positive. -/
+lemma singleSiteKernel_pos_of_diffOnly
+    {u : U} {s s' : NN.State} (h : DiffOnly (NN:=NN) u s s') :
+    0 < (singleSiteKernel (NN:=NN) spec p T u) s {s'} := by
+  rcases (TwoStateExclusive.pact_iff (NN:=NN) (a:=s'.act u)).1 (s'.hp u) with hpos' | hneg'
+  · have hoff : ∀ v ≠ u, s.act v = s'.act v := h.1
+    have hneq : s.act u ≠ s'.act u := h.2
+    have hs_neg :
+        s.act u = TwoStateNeuralNetwork.ζ_neg (NN:=NN) := by
+      rcases (TwoStateExclusive.pact_iff (NN:=NN) (a:=s.act u)).1 (s.hp u) with hspos | hsneg
+      · exact (False.elim (hneq (by simpa [hpos'] using hspos)))
+      · exact hsneg
+    have hfix : s' = updPos (NN:=NN) s u := by
+      ext v; by_cases hv : v = u
+      · subst hv; simp [updPos_act_at_u, hs_neg, hpos']
+      · simp [updPos_act_noteq (NN:=NN) s u v hv, hoff v hv]
+    have hK := Kbm_apply_updPos (NN:=NN) (p:=p) (T:=T) u s
+    have hK_eq :
+        HopfieldBoltzmann.Kbm (NN:=NN) p T u s s'
+          = probPos (NN:=NN) (RingHom.id ℝ) p T s u := by simpa [hfix] using hK
+    have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s' := by
+      simpa [hK_eq] using (logisticProb_pos _)
+    simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s'] using
+      (ENNReal.ofReal_pos.mpr hreal)
+  · have hoff : ∀ v ≠ u, s.act v = s'.act v := h.1
+    have hneq : s.act u ≠ s'.act u := h.2
+    have hs_pos :
+        s.act u = TwoStateNeuralNetwork.ζ_pos (NN:=NN) := by
+      rcases (TwoStateExclusive.pact_iff (NN:=NN) (a:=s.act u)).1 (s.hp u) with hspos | hsneg
+      · exact hspos
+      · exact (False.elim (hneq (by simpa [hneg'] using hsneg)))
+    have hfix : s' = updNeg (NN:=NN) s u := by
+      ext v; by_cases hv : v = u
+      · subst hv; simp [updNeg_act_at_u, hs_pos, hneg']
+      · simp [updNeg_act_noteq (NN:=NN) s u v hv, hoff v hv]
+    have hK := Kbm_apply_updNeg (NN:=NN) (p:=p) (T:=T) u s
+    have hK_eq :
+        HopfieldBoltzmann.Kbm (NN:=NN) p T u s s'
+          = 1 - probPos (NN:=NN) (RingHom.id ℝ) p T s u := by simpa [hfix] using hK
+    have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s' := by
+      simpa [hK_eq] using (one_sub_logistic_pos _)
+    simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s'] using
+      (ENNReal.ofReal_pos.mpr hreal)
+
+/-- Single-site Gibbs update stays at the current state with positive probability. -/
+lemma singleSiteKernel_diag_pos (u : U) (s : NN.State) :
+    0 < (singleSiteKernel (NN:=NN) spec p T u) s {s} := by
+  rcases (TwoStateExclusive.pact_iff (NN:=NN) (a:=s.act u)).1 (s.hp u) with hpos | hneg
+  · have hfix : s = updPos (NN:=NN) s u := by
+      ext v; by_cases hv : v = u
+      · subst hv; simp [updPos_act_at_u, hpos]
+      · simp [updPos_act_noteq (NN:=NN) s u v hv]
+    have hK := Kbm_apply_updPos (NN:=NN) (p:=p) (T:=T) u s
+    have hK_eq :
+        HopfieldBoltzmann.Kbm (NN:=NN) p T u s s = probPos (NN:=NN) (RingHom.id ℝ) p T s u := by
+      dsimp [hfix]; grind
+    have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s := by
+      simpa [hK_eq] using (logisticProb_pos _)
+    simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s] using
+      (ENNReal.ofReal_pos.mpr hreal)
+  · have hfix : s = updNeg (NN:=NN) s u := by
+      ext v; by_cases hv : v = u
+      · subst hv; simp [updNeg_act_at_u, hneg]
+      · simp [updNeg_act_noteq (NN:=NN) s u v hv]
+    have hK := Kbm_apply_updNeg (NN:=NN) (p:=p) (T:=T) u s
+    have hK_eq :
+        HopfieldBoltzmann.Kbm (NN:=NN) p T u s s
+          = 1 - probPos (NN:=NN) (RingHom.id ℝ) p T s u := by
+      rw [hfix]; grind
+    have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s := by
+      simpa [hK_eq] using (one_sub_logistic_pos _)
+    simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s] using
+      (ENNReal.ofReal_pos.mpr hreal)
+
 open Classical
 
 /-- Sites (as a Finset) where two states differ. -/
@@ -888,7 +962,7 @@ private lemma vecToMeasure_singleton (s : NN.State) :
     simp [ht]
   · simp
 
-private lemma vecToMeasure_eq_μBoltz :
+lemma vecToMeasure_eq_μBoltz :
     vecToMeasure (πBoltzVec (NN:=NN) (spec:=spec) (p:=p) (T:=T))
       = μBoltz (NN:=NN) (spec:=spec) (p:=p) (T:=T) := by
   ext S hS

@@ -1,8 +1,12 @@
-import HopfieldNet.ThreeD.BoltzmannLearning.SOTA
+import HopfieldNet.BoltzmannLearningQuiver.SOTA
 
 /-!
 ## Boltzmann Machine learning entrypoint
 
-This module adds the complete BM learning story to HNBM without modifying existing files.
-Build with: `lake build HopfieldNet.BMLearning`
+BM learning on Quiver neural networks (`State ℝ U`, `Params`, `HopfieldEnergy`, Gibbs dynamics).
+
+Build: `lake build HopfieldNet.BMLearning`
+
+The legacy ThreeD layer (`Config U = U → Bool`) remains at
+`HopfieldNet.ThreeD.BoltzmannLearning.SOTA`.
 -/

@@ -128,6 +128,10 @@ lemma hopfield_value_dichotomy
   | inr h_eq_neg_one =>
     exact h_eq_neg_one
 
+@[simp] lemma hopfield_pact_one : (HopfieldNetwork R U).pact (1 : R) := Or.inl rfl
+
+@[simp] lemma hopfield_pact_neg_one : (HopfieldNetwork R U).pact (-1 : R) := Or.inr rfl
+
 /--
 Extracts the first element from a vector of length 1.
 -/

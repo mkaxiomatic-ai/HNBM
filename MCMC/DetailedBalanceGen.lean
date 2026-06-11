@@ -7,22 +7,20 @@ import Mathlib.Order.CompletePartialOrder
 import Mathlib.Probability.Kernel.Invariance
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
-set_option linter.unusedSectionVars false
-set_option linter.unusedSimpArgs false
-set_option linter.style.openClassical false
+/-!
+# Detailed balance on finite types
+
+Finite-sum expansions of restricted integrals and reversibility from pointwise balance.
+-/
 
 open MeasureTheory Filter Set
-
-open scoped ProbabilityTheory
+open scoped ProbabilityTheory ENNReal NNReal
 
 variable {α : Type*} [MeasurableSpace α]
 
 namespace ProbabilityTheory.Kernel
 
-/--
-A reversible Markov kernel leaves the measure `π` invariant.
-Proof uses detailed balance with `B = univ` and `κ x univ = 1`.
--/
+/-- Reversible kernels leave `π` invariant. -/
 theorem Invariant.of_IsReversible
     {κ : Kernel α α} [IsMarkovKernel κ] {π : Measure α}
     (h_rev : IsReversible κ π) : Invariant κ π := by
@@ -30,13 +28,11 @@ theorem Invariant.of_IsReversible
   have h' := (h_rev hs MeasurableSet.univ).symm
   have h'' : ∫⁻ x, κ x s ∂π = ∫⁻ x in s, κ x Set.univ ∂π := by
     simpa [Measure.restrict_univ] using h'
-  have hConst : ∫⁻ x in s, κ x Set.univ ∂π = π s := by
-
-    simp [measure_univ]
-  have hπ : ∫⁻ x, κ x s ∂π = π s := h''.trans hConst
+  have hπ : ∫⁻ x, κ x s ∂π = π s := h''.trans (by simp [measure_univ])
   calc
-    (π.bind κ) s = ∫⁻ x, κ x s ∂π := Measure.bind_apply hs (Kernel.aemeasurable _)
+    (π.bind κ) s = ∫⁻ x, κ x s ∂π := ?_
     _ = π s := hπ
+  · exact Measure.bind_apply hs (Kernel.aemeasurable _)
 section ReversibilityFinite
 
 open MeasureTheory ProbabilityTheory Classical
@@ -87,14 +83,11 @@ lemma Finset.sum_subset_of_subset
   Finset.sum_if_mem_eq_sum_filter S f
 
 /-- Every subset of a finite type is finite. -/
-lemma Set.finite_of_subsingleton_fintype
-    {γ : Type*} [Fintype γ] (S : Set γ) : S.Finite :=
-  (Set.toFinite _)
+lemma Set.finite_of_subsingleton_fintype {γ : Type*} [Fintype γ] (S : Set γ) : S.Finite :=
+  Set.toFinite S
 
 end AuxFiniteSum
 section FiniteMeasureAPI
-open scoped  ENNReal NNReal
-open MeasureTheory
 
 variable {α : Type*}
 
@@ -111,8 +104,7 @@ lemma lintegral_count_fintype
     [Fintype α] [DecidableEq α]
     (f : α → ℝ≥0∞) :
     ∫⁻ x, f x ∂(Measure.count : Measure α) = ∑ x : α, f x := by
-
-  simpa [tsum_fintype] using (MeasureTheory.lintegral_count f)
+  simpa [tsum_fintype] using MeasureTheory.lintegral_count f
 
 -- Finite-type restricted lintegral as a weighted finite sum.
 lemma lintegral_fintype_measure_restrict
@@ -150,16 +142,13 @@ lemma lintegral_fintype_measure_restrict
         exact hx hy2
       simp [Measure.restrict_apply, hx, hInter]
   calc
-    ∫⁻ x in A, f x ∂μ
-        = ∑ x : α, f x * (μ.restrict A) {x} := hRestr
-    _ = ∑ x : α, f x * (if x ∈ A then μ {x} else 0) := by
-          simp [hSingleton]
-    _ = ∑ x : α, (if x ∈ A then μ {x} * f x else 0) := by
-          refine Finset.sum_congr rfl ?_
-          intro x _
-          by_cases hx : x ∈ A
-          · simp [hx, mul_comm]
-          · simp [hx]
+    ∫⁻ x in A, f x ∂μ = ∑ x : α, f x * (μ.restrict A) {x} := ?_
+    _ = ∑ x : α, f x * (if x ∈ A then μ {x} else 0) := ?_
+    _ = ∑ x : α, if x ∈ A then μ {x} * f x else 0 := ?_
+  · exact hRestr
+  · simp [hSingleton]
+  · refine Finset.sum_congr rfl fun x _ => ?_
+    by_cases hx : x ∈ A <;> simp [hx, mul_comm]
 
 /-- Probability measure style formula for a finite type:
 turn a restricted integral into a finite sum with point masses. -/
@@ -175,14 +164,10 @@ lemma lintegral_fintype_prob_restrict
 lemma lintegral_count_restrict
     [MeasurableSpace α] [MeasurableSingletonClass α] [Fintype α] [DecidableEq α]
     (A : Set α) (f : α → ℝ≥0∞) :
-    ∫⁻ x in A, f x ∂(Measure.count : Measure α)
-      = ∑ x : α, (if x ∈ A then f x else 0) := by
-
-  have h :=
-    lintegral_fintype_prob_restrict (μ:=(Measure.count : Measure α)) A f
-  have hμ : ∀ x : α, (Measure.count : Measure α) {x} = 1 := by
-    intro x; simp
-  simpa [hμ, one_mul] using h
+    ∫⁻ x in A, f x ∂(Measure.count : Measure α) = ∑ x : α, if x ∈ A then f x else 0 := by
+  have hμ : ∀ x : α, (Measure.count : Measure α) {x} = 1 := fun x => by simp
+  simpa [hμ, one_mul] using
+    lintegral_fintype_prob_restrict (μ := Measure.count) A f
 
 /-- Convenience rewriting for the specific pattern used in detailed balance proofs:
 move `μ {x}` factor to the left of function argument. -/
@@ -196,13 +181,11 @@ lemma lintegral_restrict_as_sum_if
 
 end FiniteMeasureAPI
 
-/-- Evaluation lemma for `Kernel.ofFunOfCountable`. Added for convenient rewriting/simp. -/
-@[simp]
-lemma ofFunOfCountable_apply
+@[simp] lemma ofFunOfCountable_apply
     {α β : Type*} [MeasurableSpace α] [MeasurableSpace β]
     [Countable α] [MeasurableSingletonClass α]
     (f : α → Measure β) (a : α) :
-    (Kernel.ofFunOfCountable f) a = f a := rfl
+    Kernel.ofFunOfCountable f a = f a := rfl
 
 omit [Fintype α] in
 /-- Finite discrete expansion of a restricted lintegral of a kernel (measurable singletons). -/
@@ -261,10 +244,12 @@ lemma measure_eq_sum_finset
           = κ x ({a} : Set α) + ∑ y ∈ s, κ x {y} := by
       simp [Finset.sum_insert, ha_notin]
     calc
-      κ x ((insert a s : Finset α) : Set α)
-          = κ x ({a} : Set α) + κ x (s : Set α) := hAdd
-      _ = κ x ({a} : Set α) + ∑ y ∈ s, κ x {y} := by rw [hIH]
-      _ = ∑ y ∈ insert a s, κ x {y} := by simp [hSum]
+      κ x ((insert a s : Finset α) : Set α) = κ x ({a} : Set α) + κ x (s : Set α) := ?_
+      _ = κ x ({a} : Set α) + ∑ y ∈ s, κ x {y} := ?_
+      _ = ∑ y ∈ insert a s, κ x {y} := ?_
+    · exact hAdd
+    · rw [hIH]
+    · simp [hSum]
 
 /-- Finite discrete reversibility from pointwise detailed balance. -/
 lemma isReversible_of_pointwise_fintype
@@ -343,22 +328,17 @@ lemma isReversible_of_pointwise_fintype
     intro y hy
     exact hPoint (x:=x) (y:=y)
   calc
-      ∑ x ∈ hFinA.toFinset, ∑ y ∈ hFinB.toFinset, π {x} * κ x {y}
-          = ∑ x ∈ hFinA.toFinset, ∑ y ∈ hFinB.toFinset, π {y} * κ y {x} := hRew
-      _ = ∑ y ∈ hFinB.toFinset, ∑ x ∈ hFinA.toFinset, π {y} * κ y {x} := by
-            simpa using
-              (Finset.sum_comm :
-                (∑ x ∈ hFinA.toFinset, ∑ y ∈ hFinB.toFinset,
-                    π {y} * κ y {x})
-                  =
-                ∑ y ∈ hFinB.toFinset, ∑ x ∈ hFinA.toFinset,
-                    π {y} * κ y {x})
-      _ = ∑ x ∈ hFinB.toFinset, ∑ y ∈ hFinA.toFinset, π {x} * κ x {y} := rfl
+    ∑ x ∈ hFinA.toFinset, ∑ y ∈ hFinB.toFinset, π {x} * κ x {y} =
+        ∑ x ∈ hFinA.toFinset, ∑ y ∈ hFinB.toFinset, π {y} * κ y {x} := ?_
+    _ = ∑ y ∈ hFinB.toFinset, ∑ x ∈ hFinA.toFinset, π {y} * κ y {x} := ?_
+    _ = ∑ x ∈ hFinB.toFinset, ∑ y ∈ hFinA.toFinset, π {x} * κ x {y} := rfl
+  · exact hRew
+  · simpa using
+      Finset.sum_comm (s := hFinA.toFinset) (t := hFinB.toFinset)
+        (f := fun x y => π {y} * κ y {x})
 
 end ReversibilityFinite
 end ProbabilityTheory.Kernel
-
-open scoped ENNReal NNReal
 
 /-- Singleton evaluation of a PMF turned into a measure. -/
 @[simp]
@@ -375,8 +355,7 @@ lemma PMF.toMeasure_bind_fintype
     [MeasurableSpace β] [MeasurableSingletonClass β]
     (p : PMF α) (f : α → PMF β) (B : Set β) (hB : MeasurableSet B) :
     (p.bind f).toMeasure B = ∑ a : α, p a * (f a).toMeasure B := by
-  have hBind_apply : ∀ b : β, (p.bind f) b = ∑ a : α, p a * f a b := by
-    intro b
+  have hBind_apply : ∀ b : β, (p.bind f) b = ∑ a : α, p a * f a b := fun b => by
     simp [PMF.bind_apply, tsum_fintype]
   have hMeasure :
     (p.bind f).toMeasure B
@@ -392,55 +371,34 @@ lemma PMF.toMeasure_bind_fintype
         · simp [hb]
         · simp [hb]
   calc
-    (p.bind f).toMeasure B
-        = ∑ b : β, (p.bind f) b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := hMeasure
-    _ = ∑ b : β, (∑ a : α, p a * f a b) *
-            B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := by
-            refine Finset.sum_congr rfl ?_; intro b _; simp [hBind_apply]
-    _ = ∑ b : β, ∑ a : α, (p a * f a b) *
-            B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := by
-            refine Finset.sum_congr rfl ?_; intro b _
-            have h := Finset.sum_mul (s:=Finset.univ)
-                        (f:=fun a : α => p a * f a b)
-                        (a:=B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
-            simpa using h
-    _ = ∑ a : α, ∑ b : β, (p a * f a b) *
-            B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := by
-            simpa using
-              (Finset.sum_comm :
-                (∑ b : β, ∑ a : α, (p a * f a b) *
-                    B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
-                  =
-                ∑ a : α, ∑ b : β, (p a * f a b) *
-                    B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
-    _ = ∑ a : α, p a *
-            (∑ b : β, f a b *
-                B.indicator (fun _ : β => (1 : ℝ≥0∞)) b) := by
-            refine Finset.sum_congr rfl ?_; intro a _
-            have hTerm :
-              ∑ b : β, (p a * f a b) *
-                  B.indicator (fun _ : β => (1 : ℝ≥0∞)) b
-                = p a * ∑ b : β, f a b *
-                    B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := by
-              have h2 :=
-                (Finset.mul_sum (a:=p a) (s:=Finset.univ)
-                  (f:=fun b : β => f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)).symm
-              have hR :
-                ∑ b : β, p a * (f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
-                  = ∑ b : β, (p a * f a b) *
-                      B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := by
-                  refine Finset.sum_congr rfl ?_; intro b _; simp [mul_assoc]
-              simpa [hR] using h2
-            simp [hTerm]
-    _ = ∑ a : α, p a * (f a).toMeasure B := by
-            refine Finset.sum_congr rfl ?_
-            intro a _
-            have hIndicator :
-              (∑ b : β, f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
-                = ∑ b : β, B.indicator (f a) b := by
-              refine Finset.sum_congr rfl ?_
-              intro b _
-              by_cases hb : b ∈ B
-              · simp [hb]
-              · simp [hb]
-            simp [hIndicator, PMF.toMeasure, hB]
+    (p.bind f).toMeasure B =
+        ∑ b : β, (p.bind f) b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := ?_
+    _ = ∑ b : β, (∑ a : α, p a * f a b) * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := ?_
+    _ = ∑ b : β, ∑ a : α, (p a * f a b) * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := ?_
+    _ = ∑ a : α, ∑ b : β, (p a * f a b) * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := ?_
+    _ = ∑ a : α, p a * (∑ b : β, f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b) := ?_
+    _ = ∑ a : α, p a * (f a).toMeasure B := ?_
+  · exact hMeasure
+  · refine Finset.sum_congr rfl fun b _ => ?_
+    simp [hBind_apply]
+  · refine Finset.sum_congr rfl fun b _ => ?_
+    simpa using Finset.sum_mul (s := Finset.univ) (f := fun a => p a * f a b)
+      (a := B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
+  · simpa using
+      Finset.sum_comm (s := Finset.univ) (t := Finset.univ)
+        (f := fun b a => (p a * f a b) * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)
+  · refine Finset.sum_congr rfl fun a _ => ?_
+    have hTerm :
+        ∑ b : β, (p a * f a b) * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b =
+          p a * ∑ b : β, f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b := by
+      simpa [mul_assoc, Finset.mul_sum] using
+        (Finset.mul_sum (a := p a) (s := Finset.univ)
+          (f := fun b => f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b)).symm
+    simp [hTerm]
+  · refine Finset.sum_congr rfl fun a _ => ?_
+    have hIndicator :
+        (∑ b : β, f a b * B.indicator (fun _ : β => (1 : ℝ≥0∞)) b) =
+          ∑ b : β, B.indicator (f a) b := by
+      refine Finset.sum_congr rfl fun b _ => by
+        by_cases hb : b ∈ B <;> simp [hb]
+    simp [hIndicator, PMF.toMeasure, hB]

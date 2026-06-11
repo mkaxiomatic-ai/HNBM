@@ -21,15 +21,13 @@ namespace TwoStateBridge
 
 open NeuralNetwork
 
-universe uR uU uζ
-
-variable {R : Type uR} {U : Type uU} {ζ : Type uζ}
+variable {R : Type} {U : Type} {ζ : Type}
 
 section
 
 variable [Field R] [LinearOrder R] [IsStrictOrderedRing R]
 variable [DecidableEq U]
-variable {NN : NeuralNetwork R U ζ} [TwoStateNeuralNetwork (NN := NN)]
+variable {NN : NeuralNetwork R U ζ} [TwoStateNeuralNetwork NN]
 
 /-- Build a TwoState `NN.State` from a Bool-config by choosing `ζ_pos`/`ζ_neg` pointwise. -/
 noncomputable def stateOfConfig (c : BoltzmannLearning.Config U) : NN.State :=
@@ -42,15 +40,15 @@ noncomputable def stateOfConfig (c : BoltzmannLearning.Config U) : NN.State :=
 
 /-- Push an `EnergySpec'` to an energy on Bool-configs via `stateOfConfig` and a ring hom `f`. -/
 noncomputable def energyBool
-    (E : TwoState.EnergySpec' (NN := NN)) (f : R →+* ℝ) (p : _root_.Params NN) :
+    (E : TwoState.EnergySpec' (R := R) (U := U) (ζ := ζ) NN) (f : R →+* ℝ) (p : _root_.Params NN) :
     BoltzmannLearning.Config U → ℝ :=
-  fun c => f (E.E p (stateOfConfig (NN := NN) c))
+  fun c => f (E.E p (stateOfConfig c))
 
-/-- Package the TwoState energy as a `BoltzmannLearning.BM` on Bool-configurations. -/
+/-- Package the TwoState energy as a `BoltzmannLearning.BM` on Bool-config configurations. -/
 noncomputable def bmOfEnergySpec
-    (E : TwoState.EnergySpec' (NN := NN)) (f : R →+* ℝ) :
+    (E : TwoState.EnergySpec' (R := R) (U := U) (ζ := ζ) NN) (f : R →+* ℝ) :
     BoltzmannLearning.BM (_root_.Params NN) U :=
-{ energy := fun p c => energyBool (NN := NN) E f p c }
+{ energy := fun p c => energyBool E f p c }
 
 end
 

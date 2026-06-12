@@ -13,7 +13,7 @@ CD-k approximates the negative phase by `k` sequential Gibbs sweeps from clamped
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open MeasureTheory TwoState
 
@@ -40,7 +40,7 @@ noncomputable def cdLearningDirection (k : ℕ) (order : List U) (T : Temperatur
   learningRule.updateDir (positivePhaseAtData s_data)
     (cdNegativePhaseMeasure k order p T s_data)
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

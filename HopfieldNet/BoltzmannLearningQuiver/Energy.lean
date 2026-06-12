@@ -10,14 +10,14 @@ import Mathlib.Data.Matrix.Mul
 import Mathlib.Algebra.BigOperators.Ring.Finset
 
 /-!
-# Hamiltonian as vector Gibbs energy
+# Hamiltonian as vector Gibbs energy (`{0,1}`)
 
 `hamiltonian p s = vectorGibbsEnergy p s = -⟪stat s, thetaFromParams p⟫`.
 -/
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open scoped BigOperators
 open VectorGibbs InnerProductSpace Matrix TwoState HopfieldEnergy Finset
@@ -26,17 +26,17 @@ variable {U : Type} [Fintype U] [DecidableEq U] [Nonempty U]
 
 /-- Coordinate-wise sufficient-statistic coefficients. -/
 noncomputable def statCoeffs (s : State ℝ U) : I U → ℝ
-  | Sum.inl (i, j) => (1 / 2 : ℝ) * s.act i * s.act j
+  | Sum.inl (i, j) => s.act i * s.act j
   | Sum.inr i => -s.act i
 
-/-- Coordinate-wise parameter coefficients. -/
+/-- Coordinate-wise parameter coefficients (`w/2` on weight coords). -/
 noncomputable def thetaCoeffs (p : Params ℝ U) : I U → ℝ
-  | Sum.inl (i, j) => p.w i j
+  | Sum.inl (i, j) => (p.w i j) / 2
   | Sum.inr i => (p.θ i).get fin0
 
 /-- Simp lemma for weight coordinates of `statCoeffs`. -/
 @[simp] lemma statCoeffs_inl (s : State ℝ U) (i j : U) :
-    statCoeffs s (Sum.inl (i, j)) = (1 / 2 : ℝ) * s.act i * s.act j := rfl
+    statCoeffs s (Sum.inl (i, j)) = s.act i * s.act j := rfl
 
 /-- Simp lemma for bias coordinates of `statCoeffs`. -/
 @[simp] lemma statCoeffs_inr (s : State ℝ U) (i : U) :
@@ -44,7 +44,7 @@ noncomputable def thetaCoeffs (p : Params ℝ U) : I U → ℝ
 
 /-- Simp lemma for weight coordinates of `thetaCoeffs`. -/
 @[simp] lemma thetaCoeffs_inl (p : Params ℝ U) (i j : U) :
-    thetaCoeffs p (Sum.inl (i, j)) = p.w i j := rfl
+    thetaCoeffs p (Sum.inl (i, j)) = (p.w i j) / 2 := rfl
 
 /-- Simp lemma for bias coordinates of `thetaCoeffs`. -/
 @[simp] lemma thetaCoeffs_inr (p : Params ℝ U) (i : U) :
@@ -90,13 +90,14 @@ lemma inner_stat_theta (p : Params ℝ U) (s : State ℝ U) :
       (∑ x : U × U, statCoeffs s (Sum.inl x) * thetaCoeffs p (Sum.inl x)) =
         ∑ ij : U × U, (1 / 2 : ℝ) * s.act ij.1 * s.act ij.2 * p.w ij.1 ij.2 := by
     refine Finset.sum_congr rfl fun ⟨i, j⟩ _ => ?_
-    simp [statCoeffs_inl, thetaCoeffs_inl, mul_assoc, mul_comm, mul_left_comm]
+    simp only [statCoeffs_inl, thetaCoeffs_inl]
+    ring
   rw [PiLp.inner_apply, Fintype.sum_sum_type]
   simp only [stat_ofLp_coeff, theta_ofLp_coeff, Real.inner_apply, statCoeffs_inr, thetaCoeffs_inr]
   rw [hinl, hW, hθ, sub_eq_add_neg, mul_comm]
   simp [mul_comm]
 
-/-- Gibbs / Hopfield energy on quiver states (same as `HopfieldEnergy.hamiltonian`). -/
+/-- Gibbs / Boltzmann energy on quiver states. -/
 noncomputable def energy (p : Params ℝ U) (s : State ℝ U) : ℝ :=
   hamiltonian p s
 
@@ -118,7 +119,7 @@ lemma vectorGibbsEnergy_eq_neg_inner (p : Params ℝ U) (s : State ℝ U) :
 theorem vectorGibbsEnergy_eq_hamiltonian (p : Params ℝ U) (s : State ℝ U) :
     vectorGibbsEnergy p s = hamiltonian p s := by
   rw [vectorGibbsEnergy_eq_neg_inner, inner_stat_theta]
-  simp [hamiltonian, HopfieldEnergy.hamiltonian]
+  simp [hamiltonian, HopfieldEnergy.zeroOneHamiltonian]
   ring
 
 /-- Symmetry of the Hamiltonian / vector Gibbs energy identification. -/
@@ -131,7 +132,7 @@ theorem energy_eq_vectorGibbsEnergy (p : Params ℝ U) (s : State ℝ U) :
     energy p s = vectorGibbsEnergy p s := by
   rw [← hamiltonian_eq_energy, vectorGibbsEnergy_eq_hamiltonian]
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

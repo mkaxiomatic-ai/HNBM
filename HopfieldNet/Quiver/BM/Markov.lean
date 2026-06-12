@@ -6,6 +6,17 @@ Authors: Matteo Cipollina
 import HopfieldNet.Quiver.BM.CoreQuiv
 import HopfieldNet.Quiver.HN.MarkovQuiv
 
+/-!
+# Markov kernels and Boltzmann measures (legacy `{±1}` CoreQuiv BM)
+
+Infrastructure on top of `HopfieldNet.Quiver.BM.CoreQuiv`: finite state space, Gibbs transition
+kernel, partition function, and Boltzmann stationary measure for the **legacy spin-encoded**
+`BoltzmannMachine` API.
+
+**Canonical `{0,1}` dynamics and ergodicity:** `TwoState.ZeroOne` with `zeroOneEnergySpec`, via
+`HopfieldNet.BoltzmannLearningQuiver` and `HopfieldNet.Quiver.BM.Ergodicity`.
+-/
+
 open Finset Matrix NeuralNetwork State ENNReal Real
 open PMF MeasureTheory ProbabilityTheory.Kernel Set
 
@@ -13,7 +24,7 @@ variable {R U : Type} [Field R] [LinearOrder R] [IsStrictOrderedRing R] [Decidab
   [Fintype U] [Nonempty U] [Coe R ℝ]
 
 noncomputable instance : Fintype ((BoltzmannMachine R U).State) := by
-  -- States are functions from U to {-1, 1} with a predicate
+  -- Legacy spin states `{±1}` (see module doc on `CoreQuiv`).
   let binaryType := {x : R | x = -1 ∨ x = 1}
   have binaryFintype : Fintype binaryType := by
     apply Fintype.ofList [⟨-1, Or.inl rfl⟩, ⟨1, Or.inr rfl⟩]

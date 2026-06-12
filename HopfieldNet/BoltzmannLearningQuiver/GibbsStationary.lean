@@ -2,7 +2,7 @@
 Copyright (c) 2025 HNBM contributors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.BoltzmannLearningQuiver.SymmetricBinary
+import HopfieldNet.BoltzmannLearningQuiver.ZeroOne
 import HopfieldNet.BoltzmannLearningQuiver.Phases
 import HopfieldNet.Quiver.BM.Ergodicity
 
@@ -14,13 +14,13 @@ Random-scan Gibbs ergodicity in learning-layer notation.
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open MeasureTheory ProbabilityTheory TwoState HopfieldBoltzmann Matrix
 
 variable {U : Type} [Fintype U] [DecidableEq U] [Nonempty U]
 
-/-- Random-scan Gibbs kernel on quiver `{±1}` states. -/
+/-- Random-scan Gibbs kernel on quiver `{0,1}` states. -/
 noncomputable def randomScanGibbsKernel (p : Params ℝ U) (T : Temperature) : Kernel (State ℝ U) (State ℝ U) :=
   randomScanKernel (NN := NN ℝ U) energySpec p T
 
@@ -44,7 +44,7 @@ theorem negativePhaseMeasure_is_gibbs_stationary (T : Temperature) (p : Params �
   dsimp [randomScanGibbsKernel, negativePhaseMeasure]
   exact randomScan_ergodicUniqueInvariant (NN := NN ℝ U) energySpec p T
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

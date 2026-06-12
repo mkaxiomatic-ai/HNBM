@@ -2,29 +2,24 @@
 Copyright (c) 2025 HNBM contributors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.BoltzmannLearningQuiver.SequentialSweepUnique
-import HopfieldNet.BoltzmannLearningQuiver.ContrastiveDivergence
+import HopfieldNet.bmvisible.SequentialSweepUnique
+import HopfieldNet.bmvisible.ContrastiveDivergence
 import MCMC.toKernel
 import MCMC.DetailedBalanceGen
 
 /-!
 # Equivalence of sequential Gibbs dynamics layers
-
-PMF (`gibbsSweep`), kernel (`sequentialSweepKernel`), and matrix (`sweepRowMatrix`) views.
 -/
 
-namespace NeuralNetwork
-
-namespace BoltzmannLearningQuiver
-
-namespace ZeroOne
+namespace BMVisible
 
 open Classical MeasureTheory ProbabilityTheory TwoState HopfieldBoltzmann Matrix
 open scoped ProbabilityTheory ENNReal BigOperators
 
 variable {U : Type} [Fintype U] [DecidableEq U] [Nonempty U]
+variable {part : VisibleHiddenPartition U}
 
-local notation "State" => State ℝ U
+local notation "State" => BMState ℝ U part
 
 private lemma measure_eq_sum_singletons {α : Type*} [Fintype α] [DecidableEq α]
     [MeasurableSpace α] [MeasurableSingletonClass α] (m : Measure α) (S : Set α) :
@@ -38,26 +33,26 @@ private lemma measure_eq_sum_singletons {α : Type*} [Fintype α] [DecidableEq �
   simpa [F, hU] using
     (measure_biUnion_finset (μ := m) (s := F) (f := fun s : α => ({s} : Set α)) hdisj (_))
 
-private lemma gibbsUpdate_prob_eq_SSrow (u : U) (p : Params ℝ U) (T : Temperature)
+private lemma gibbsUpdate_prob_eq_SSrow (u : U) (p : BMParams ℝ U part) (T : Temperature)
     (s t : State) :
-    (TwoState.gibbsUpdate (NN := NN ℝ U) (RingHom.id ℝ) p T s u) t =
+    (TwoState.gibbsUpdate (NN := NN ℝ U part) (RingHom.id ℝ) p T s u) t =
       ENNReal.ofReal (SSrow u p T s t) := by
   have hkernel :
-      (singleSiteKernel (NN := NN ℝ U) energySpec p T u) s {t} =
-        (TwoState.gibbsUpdate (NN := NN ℝ U) (RingHom.id ℝ) p T s u) t := by
+      (singleSiteKernel (NN := NN ℝ U part) (energySpec part) p T u) s {t} =
+        (TwoState.gibbsUpdate (NN := NN ℝ U part) (RingHom.id ℝ) p T s u) t := by
     unfold singleSiteKernel pmfToKernel
     simp_rw [Kernel.ofFunOfCountable_apply, PMF.toMeasure_singleton]
   have hfin :
-      (TwoState.gibbsUpdate (NN := NN ℝ U) (RingHom.id ℝ) p T s u) t ≠ ⊤ :=
-    (PMF.apply_lt_top (TwoState.gibbsUpdate (NN := NN ℝ U) (RingHom.id ℝ) p T s u) t).ne
+      (TwoState.gibbsUpdate (NN := NN ℝ U part) (RingHom.id ℝ) p T s u) t ≠ ⊤ :=
+    (PMF.apply_lt_top (TwoState.gibbsUpdate (NN := NN ℝ U part) (RingHom.id ℝ) p T s u) t).ne
   dsimp [SSrow]
   rw [← hkernel]
   simp [ENNReal.ofReal_toReal, hfin]
 
 /-- One sequential Gibbs sweep: PMF probability equals `sweepRowMatrix` entry. -/
-theorem gibbsSweep_prob_eq_sweepRowMatrix (order : List U) (p : Params ℝ U) (T : Temperature)
+theorem gibbsSweep_prob_eq_sweepRowMatrix (order : List U) (p : BMParams ℝ U part) (T : Temperature)
     (s t : State) :
-    (TwoState.gibbsSweep (NN := NN ℝ U) order p T (RingHom.id ℝ) s) t =
+    (TwoState.gibbsSweep (NN := NN ℝ U part) order p T (RingHom.id ℝ) s) t =
       ENNReal.ofReal (sweepRowMatrix p T order s t) := by
   induction order generalizing s t with
   | nil =>
@@ -69,12 +64,12 @@ theorem gibbsSweep_prob_eq_sweepRowMatrix (order : List U) (p : Params ℝ U) (T
         exact ht
   | cons u us ih =>
       calc
-        (TwoState.gibbsSweep (NN := NN ℝ U) (u :: us) p T (RingHom.id ℝ) s) t
-            = ∑' sMid, (TwoState.gibbsUpdate (NN := NN ℝ U) (RingHom.id ℝ) p T s u) sMid *
-                (TwoState.gibbsSweep (NN := NN ℝ U) us p T (RingHom.id ℝ) sMid) t := by
+        (TwoState.gibbsSweep (NN := NN ℝ U part) (u :: us) p T (RingHom.id ℝ) s) t
+            = ∑' sMid, (TwoState.gibbsUpdate (NN := NN ℝ U part) (RingHom.id ℝ) p T s u) sMid *
+                (TwoState.gibbsSweep (NN := NN ℝ U part) us p T (RingHom.id ℝ) sMid) t := by
               rw [TwoState.gibbsSweep_cons]
-              change (PMF.bind (TwoState.gibbsUpdate (NN := NN ℝ U) (RingHom.id ℝ) p T s u)
-                  (fun sMid => TwoState.gibbsSweep (NN := NN ℝ U) us p T (RingHom.id ℝ) sMid)) t = _
+              change (PMF.bind (TwoState.gibbsUpdate (NN := NN ℝ U part) (RingHom.id ℝ) p T s u)
+                  (fun sMid => TwoState.gibbsSweep (NN := NN ℝ U part) us p T (RingHom.id ℝ) sMid)) t = _
               rw [PMF.bind_apply, tsum_fintype]
         _ = ∑' sMid, ENNReal.ofReal (SSrow u p T s sMid) *
               ENNReal.ofReal (sweepRowMatrix p T us sMid t) := by
@@ -114,17 +109,17 @@ private lemma kernel_eq_of_singleton_eval {κ η : Kernel State State}
   refine Finset.sum_congr rfl fun t _ => h s t
 
 /-- Single-site row matrix induces the same kernel as `singleSiteKernel`. -/
-theorem matrixToKernel_SSrow_eq_singleSiteKernel (u : U) (p : Params ℝ U) (T : Temperature) :
+theorem matrixToKernel_SSrow_eq_singleSiteKernel (u : U) (p : BMParams ℝ U part) (T : Temperature) :
     matrixToKernel (SSrow u p T) (SSrow_isStochastic u p T) =
-      singleSiteKernel (NN := NN ℝ U) energySpec p T u :=
+      singleSiteKernel (NN := NN ℝ U part) (energySpec part) p T u :=
   kernel_eq_of_singleton_eval fun s t => by
     rw [matrixToKernel_singleton_eval, singleSiteKernel_singleton_eval]
     exact congrArg ENNReal.ofReal (SSrow_eq_Kbm u p T s t)
 
 private lemma matrixToKernel_sweepRowMatrix_eq_sequentialSweepKernel_aux (order : List U)
-    (p : Params ℝ U) (T : Temperature) :
+    (p : BMParams ℝ U part) (T : Temperature) :
     matrixToKernel (sweepRowMatrix p T order) (sweepRowMatrix_isStochastic order p T) =
-      sequentialSweepKernel p T order := by
+      sequentialSweepKernel part p T order := by
   induction order with
   | nil =>
       apply kernel_eq_of_singleton_eval
@@ -151,38 +146,38 @@ private lemma matrixToKernel_sweepRowMatrix_eq_sequentialSweepKernel_aux (order 
 
 /-- **Main equivalence:** full sweep row matrix kernel = `sequentialSweepKernel`. -/
 theorem matrixToKernel_sweepRowMatrix_eq_sequentialSweepKernel (order : List U)
-    (p : Params ℝ U) (T : Temperature) :
+    (p : BMParams ℝ U part) (T : Temperature) :
     matrixToKernel (sweepRowMatrix p T order) (sweepRowMatrix_isStochastic order p T) =
-      sequentialSweepKernel p T order :=
+      sequentialSweepKernel part p T order :=
   matrixToKernel_sweepRowMatrix_eq_sequentialSweepKernel_aux order p T
 
 /-- Sequential sweep kernel singleton mass equals `sweepRowMatrix` entry. -/
-theorem sequentialSweepKernel_eval_singleton (order : List U) (p : Params ℝ U) (T : Temperature)
+theorem sequentialSweepKernel_eval_singleton (order : List U) (p : BMParams ℝ U part) (T : Temperature)
     (s t : State) :
-    (sequentialSweepKernel p T order) s {t} =
+    (sequentialSweepKernel part p T order) s {t} =
       ENNReal.ofReal (sweepRowMatrix p T order s t) := by
   rw [← matrixToKernel_sweepRowMatrix_eq_sequentialSweepKernel order p T,
     matrixToKernel_singleton_eval (sweepRowMatrix p T order)
       (sweepRowMatrix_isStochastic order p T) s t]
 
 /-- PMF measure singleton mass equals sequential sweep kernel singleton mass. -/
-theorem gibbsSweep_toMeasure_singleton_eq_kernel (order : List U) (p : Params ℝ U) (T : Temperature)
+theorem gibbsSweep_toMeasure_singleton_eq_kernel (order : List U) (p : BMParams ℝ U part) (T : Temperature)
     (s t : State) :
-    (TwoState.gibbsSweep (NN := NN ℝ U) order p T (RingHom.id ℝ) s).toMeasure {t} =
-      (sequentialSweepKernel p T order) s {t} := by
+    (TwoState.gibbsSweep (NN := NN ℝ U part) order p T (RingHom.id ℝ) s).toMeasure {t} =
+      (sequentialSweepKernel part p T order) s {t} := by
   rw [PMF.toMeasure_singleton, gibbsSweep_prob_eq_sweepRowMatrix order p T s t,
     sequentialSweepKernel_eval_singleton order p T s t]
 
 /-- Kernel obtained by lifting one-sweep Gibbs PMFs to a Markov kernel. -/
-noncomputable def gibbsSweepKernel (order : List U) (p : Params ℝ U) (T : Temperature) :
+noncomputable def gibbsSweepKernel (order : List U) (p : BMParams ℝ U part) (T : Temperature) :
     Kernel State State :=
   pmfToKernel fun s =>
-    TwoState.gibbsSweep (NN := NN ℝ U) order p T (RingHom.id ℝ) s
+    TwoState.gibbsSweep (NN := NN ℝ U part) order p T (RingHom.id ℝ) s
 
 /-- PMF-lifted sweep kernel equals `sequentialSweepKernel`. -/
-theorem gibbsSweepKernel_eq_sequentialSweepKernel (order : List U) (p : Params ℝ U)
+theorem gibbsSweepKernel_eq_sequentialSweepKernel (order : List U) (p : BMParams ℝ U part)
     (T : Temperature) :
-    gibbsSweepKernel order p T = sequentialSweepKernel p T order :=
+    gibbsSweepKernel order p T = sequentialSweepKernel part p T order :=
   kernel_eq_of_singleton_eval fun s t => by
     dsimp [gibbsSweepKernel, pmfToKernel]
     simp only [Kernel.ofFunOfCountable_apply, PMF.toMeasure_singleton]
@@ -190,9 +185,9 @@ theorem gibbsSweepKernel_eq_sequentialSweepKernel (order : List U) (p : Params �
       (sequentialSweepKernel_eval_singleton order p T s t).symm
 
 /-- One CD step on PMFs equals matrix multiplication by `sweepRowMatrix`. -/
-theorem cdStepPMF_apply_eq_sweepRowMatrix (order : List U) (p : Params ℝ U) (T : Temperature)
+theorem cdStepPMF_apply_eq_sweepRowMatrix (order : List U) (p : BMParams ℝ U part) (T : Temperature)
     (μ : PMF State) (t : State) :
-    (cdStepPMF order p T μ) t =
+    (cdStepPMF part order p T μ) t =
       ∑ s : State, μ s * ENNReal.ofReal (sweepRowMatrix p T order s t) := by
   simp [cdStepPMF, PMF.bind_apply, tsum_fintype]
   refine Finset.sum_congr rfl fun s _ => ?_
@@ -235,7 +230,7 @@ private lemma distributionAtTime_succ (P : Matrix State State ℝ) (μ₀ : stdS
     _ = ∑ s, distributionAtTime P μ₀ k s * P s t := by simp [distributionAtTime, mul_comm]
 
 /-- CD-$k$ distribution entries from a Dirac start are nonnegative. -/
-lemma distributionAtTime_dirac_nonneg (order : List U) (p : Params ℝ U) (T : Temperature)
+lemma distributionAtTime_dirac_nonneg (order : List U) (p : BMParams ℝ U part) (T : Temperature)
     (s₀ : State) :
     ∀ k s, 0 ≤ distributionAtTime (sweepRowMatrix p T order) (diracSimplex s₀) k s := by
   intro k s
@@ -250,9 +245,9 @@ lemma distributionAtTime_dirac_nonneg (order : List U) (p : Params ℝ U) (T : T
       exact mul_nonneg (ih sMid) (sweepRowMatrix_nonneg order p T sMid s)
 
 /-- **CD-k bridge:** CD-k PMF equals `distributionAtTime` from Dirac at `s₀`. -/
-theorem cdNegativePMF_apply_eq_distributionAtTime (k : ℕ) (order : List U) (p : Params ℝ U)
+theorem cdNegativePMF_apply_eq_distributionAtTime (k : ℕ) (order : List U) (p : BMParams ℝ U part)
     (T : Temperature) (s₀ t : State) :
-    (cdNegativePMF k order p T s₀) t =
+    (cdNegativePMF part k order p T s₀) t =
       ENNReal.ofReal (distributionAtTime (sweepRowMatrix p T order) (diracSimplex s₀) k t) := by
   induction k generalizing s₀ t with
   | zero =>
@@ -274,11 +269,11 @@ theorem cdNegativePMF_apply_eq_distributionAtTime (k : ℕ) (order : List U) (p 
       split_ifs <;> simp [ENNReal.ofReal_one, ENNReal.ofReal_zero]
   | succ k ih =>
       have hstep :=
-        cdStepPMF_apply_eq_sweepRowMatrix order p T (cdNegativePMF k order p T s₀) t
+        cdStepPMF_apply_eq_sweepRowMatrix order p T (cdNegativePMF part k order p T s₀) t
       have hdist := distributionAtTime_succ (sweepRowMatrix p T order) (diracSimplex s₀) k t
       calc
-        (cdNegativePMF (k + 1) order p T s₀) t
-            = ∑ s, (cdNegativePMF k order p T s₀) s *
+        (cdNegativePMF part (k + 1) order p T s₀) t
+            = ∑ s, (cdNegativePMF part k order p T s₀) s *
                 ENNReal.ofReal (sweepRowMatrix p T order s t) := hstep
         _ = ∑ s, ENNReal.ofReal
                 (distributionAtTime (sweepRowMatrix p T order) (diracSimplex s₀) k s) *
@@ -300,10 +295,6 @@ theorem cdNegativePMF_apply_eq_distributionAtTime (k : ℕ) (order : List U) (p 
               (distributionAtTime (sweepRowMatrix p T order) (diracSimplex s₀) (k + 1) t) := by
               simp [hdist]
 
-end ZeroOne
+end BMVisible
 
-end BoltzmannLearningQuiver
-
-end NeuralNetwork
-
-#lint only docBlame docBlameThm
+#lint only docBlame

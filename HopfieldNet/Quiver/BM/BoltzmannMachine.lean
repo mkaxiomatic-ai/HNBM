@@ -360,8 +360,9 @@ variable {R U : Type} [Field R] [LinearOrder R] [IsStrictOrderedRing R]
 variable [Fintype U] [DecidableEq U] [Nonempty U]
 
 /--
-The standard Hopfield energy function (Hamiltonian) for SymmetricBinary networks.
-E(s) = -1/2 * sᵀ W s + θᵀ s
+Spin `{±1}` Hopfield Hamiltonian (used by Hopfield networks, not the canonical BM `{0,1}` API).
+
+See `zeroOneHamiltonian` below for Boltzmann machines with activations in `{0,1}`.
 -/
 noncomputable def hamiltonian
     (p : Params (SymmetricBinary R U)) (s : (SymmetricBinary R U).State) : R :=
@@ -450,6 +451,96 @@ noncomputable def symmetricBinaryEnergySpec : EnergySpec' (SymmetricBinary R U) 
     simp_rw [h_rel, map_mul, map_neg]
     rw [h_scale]
 
+/-!
+# `{0,1}` Boltzmann machine energy (canonical BM convention)
+
+Used by `HopfieldNet.BoltzmannLearningQuiver` and paper §5.
+-/
+
+/-- `{0,1}` Boltzmann Hamiltonian: `E(a) = -1/2 * aᵀ W a + θᵀ a` with `a_u ∈ {0,1}`. -/
+noncomputable def zeroOneHamiltonian
+    (p : Params (ZeroOne R U)) (s : (ZeroOne R U).State) : R :=
+  let quad : R := ∑ i : U, s.act i * (p.w.mulVec s.act i)
+  let θ_vec := fun i : U => (p.θ i).get fin0
+  (- (1/2 : R) * quad) + ∑ i : U, θ_vec i * s.act i
+
+/-- Flip energy relation for `{0,1}` activations: `ΔE = -(net_u - θ_u)`. -/
+lemma zeroOneHamiltonian_flip_relation (p : Params (ZeroOne R U)) (s : (ZeroOne R U).State) (u : U) :
+    let sPos := updPos (s := s) (u := u)
+    let sNeg := updNeg (s := s) (u := u)
+    let L := s.net p u - (p.θ u).get fin0
+    (zeroOneHamiltonian p sPos - zeroOneHamiltonian p sNeg) = - L := by
+  intro sPos sNeg L
+  unfold zeroOneHamiltonian
+  let θ_vec := fun i => (p.θ i).get fin0
+  have h_quad_diff :
+    (- (1/2 : R) * Matrix.quadraticForm p.w sPos.act) - (- (1/2 : R) * Matrix.quadraticForm p.w sNeg.act) =
+    - (p.w.mulVec s.act u) := by
+    rw [← mul_sub]
+    have h_sPos_from_sNeg : sPos.act = Function.update sNeg.act u 1 := by
+      ext i
+      by_cases hi : i = u
+      · subst hi
+        simp_rw [sPos, sNeg, updPos, updNeg, Function.update, ZeroOne_ζ_pos, ZeroOne_ζ_neg]
+        simp
+      · simp [sPos, sNeg, updPos, updNeg, Function.update, hi]
+    rw [h_sPos_from_sNeg]
+    rw [Matrix.quadratic_form_update_diag_zero (p.hw'.1) (p.hw'.2)]
+    have h_sNeg_u : sNeg.act u = 0 := by
+      change (updNeg (s := s) (u := u)).act u = (0 : R)
+      simp [updNeg_act_at_u, ZeroOne_ζ_neg]
+    rw [h_sNeg_u]
+    ring_nf
+    have h_W_sNeg_eq_W_s : p.w.mulVec sNeg.act u = p.w.mulVec s.act u := by
+      unfold Matrix.mulVec dotProduct
+      apply Finset.sum_congr rfl
+      intro j _
+      by_cases h_eq : j = u
+      · simp [h_eq, p.hw'.2 u]
+      · rw [updNeg_act_noteq s u j h_eq]
+    rw [h_W_sNeg_eq_W_s]
+  have h_linear_diff :
+      dotProduct θ_vec sPos.act - dotProduct θ_vec sNeg.act = θ_vec u := by
+    rw [← dotProduct_sub]
+    have h_diff_vec :
+        sPos.act - sNeg.act = Pi.single u (1 : R) := by
+      ext v
+      by_cases hv : v = u
+      · subst hv
+        simp only [sPos, sNeg, Pi.single_eq_same, Pi.sub_apply]
+        rw [updPos_act_at_u (NN := ZeroOne R U) (s := s) (u := v),
+            updNeg_act_at_u (NN := ZeroOne R U) (s := s) (u := v), ZeroOne_ζ_pos, ZeroOne_ζ_neg]
+        simp
+      · simp [sPos, sNeg, updPos, updNeg, Pi.single, hv, sub_eq_add_neg]
+    rw [h_diff_vec, dotProduct_single]
+    simp [mul_comm]
+  erw [add_sub_add_comm, h_quad_diff, h_linear_diff]
+  have h_net_eq_W_s : s.net p u = p.w.mulVec s.act u := by
+    classical
+    unfold State.net ZeroOne fnet Matrix.mulVec dotProduct
+    refine Finset.sum_congr rfl ?_
+    intro v _
+    by_cases hvu : v = u
+    · subst hvu
+      simp only [ne_eq, not_true_eq_false, ↓reduceIte, zero_eq_mul]
+      exact Or.inl (p.hw'.2 v)
+    · simp only [ne_eq, ite_not]
+      aesop
+  rw [← h_net_eq_W_s]
+  ring
+
+/-- Energy specification for `{0,1}` Boltzmann machines. -/
+noncomputable def zeroOneEnergySpec : EnergySpec' (ZeroOne R U) where
+  E := zeroOneHamiltonian
+  localField := fun p s u => s.net p u - (p.θ u).get fin0
+  localField_spec := by intros; rfl
+  flip_energy_relation := by
+    intro f p s u
+    have h_rel := zeroOneHamiltonian_flip_relation p s u
+    have h_scale : scale (NN:=ZeroOne R U) f = f 1 := scale_zeroOne f
+    rw [h_rel, map_neg, h_scale]
+    simp [map_mul, map_one, one_mul]
+
 end HopfieldEnergy
 
 /-!
@@ -495,6 +586,41 @@ noncomputable instance : Fintype (TwoState.SymmetricBinary ℝ U).State :=
   Fintype.ofEquiv (U → BinarySetReal) stateEquivBinarySet.symm
 
 end SymmetricBinaryFintype
+
+namespace ZeroOneFintype
+variable {U : Type} [Fintype U] [DecidableEq U] [Nonempty U]
+
+/-- Helper type representing the finite set `{0,1}` in `ℝ`. -/
+def BinarySet01 := {x : ℝ // x = 0 ∨ x = 1}
+
+noncomputable instance : DecidableEq BinarySet01 := by
+  classical
+  infer_instance
+
+noncomputable instance : Fintype BinarySet01 :=
+  Fintype.ofList
+    [⟨0, Or.inl rfl⟩, ⟨1, Or.inr rfl⟩]
+    (by
+      intro x
+      rcases x.property with h | h
+      · simp_rw [← h]; exact List.mem_cons_self
+      · simp_rw [← h]; exact List.mem_of_getLast? rfl)
+
+/-- Equivalence between `ZeroOne` states and `U → BinarySet01`. -/
+noncomputable def stateEquivBinarySet01 :
+    (TwoState.ZeroOne ℝ U).State ≃ (U → BinarySet01) where
+  toFun s := fun u => ⟨s.act u, s.hp u⟩
+  invFun f := {
+    act := fun u => (f u).val,
+    hp := fun u => (f u).property
+  }
+  left_inv s := by ext u; simp
+  right_inv f := by ext u; simp
+
+noncomputable instance : Fintype (TwoState.ZeroOne ℝ U).State :=
+  Fintype.ofEquiv (U → BinarySet01) stateEquivBinarySet01.symm
+
+end ZeroOneFintype
 
 /-!
 # Detailed Balance and the Boltzmann Distribution

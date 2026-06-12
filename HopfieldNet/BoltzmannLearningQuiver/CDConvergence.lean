@@ -24,7 +24,7 @@ namespace NeuralNetwork
 
 namespace BoltzmannLearningQuiver
 
-namespace SymmetricBinary
+namespace ZeroOne
 
 open Classical MeasureTheory ProbabilityTheory Filter Topology CanonicalEnsemble Finset
 open HopfieldBoltzmann
@@ -182,7 +182,7 @@ theorem cdLearningDirection_tendsto_learningDirection (order : List U) (h : IsFu
   rw [← exactLearningDirection_eq_learningDirection]
   exact cdLearningDirection_tendsto_exactLearningDirection order h T p s₀
 
-end SymmetricBinary
+end ZeroOne
 
 end BoltzmannLearningQuiver
 

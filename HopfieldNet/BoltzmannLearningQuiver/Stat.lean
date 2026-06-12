@@ -2,20 +2,21 @@
 Copyright (c) 2025 HNBM contributors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.BoltzmannLearningQuiver.SymmetricBinary
+import HopfieldNet.BoltzmannLearningQuiver.ZeroOne
 import HopfieldNet.BoltzmannLearningQuiver.VectorGibbs
 import Mathlib.Analysis.InnerProductSpace.PiL2
 import Physlib.Thermodynamics.Temperature.Basic
 
 /-!
-# Sufficient statistics and flat parameter space
+# Sufficient statistics and flat parameter space (`{0,1}` convention)
 
-`stat`, `thetaFromParams`, and temperature-scaled `scaledTheta T p`.
+Weight statistics are Ackley-style correlations `a_i a_j`; parameters embed `w/2` so that
+`hamiltonian = -⟪stat, thetaFromParams⟫`.
 -/
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open scoped BigOperators Temperature
 open InnerProductSpace Matrix TwoState VectorGibbs
@@ -28,16 +29,16 @@ abbrev I (U : Type) := U × U ⊕ U
 /-- Flat parameter Hilbert space `Θ = ℝ^{I(U)}`. -/
 abbrev Θ (U : Type) := EuclideanSpace ℝ (I U)
 
-/-- Sufficient statistic for a quiver state. -/
+/-- Sufficient statistic: weight coords `a_i a_j`, bias coords `-a_i`. -/
 noncomputable def stat (s : State ℝ U) : Θ U :=
   WithLp.toLp 2 (V := I U → ℝ) fun
-    | Sum.inl (i, j) => (1 / 2 : ℝ) * s.act i * s.act j
+    | Sum.inl (i, j) => s.act i * s.act j
     | Sum.inr i      => - s.act i
 
-/-- Embed quiver `Params` into flat `Θ U`. -/
+/-- Embed quiver parameters; weight coords store `w_{ij}/2` for energy consistency. -/
 noncomputable def thetaFromParams (p : Params ℝ U) : Θ U :=
   WithLp.toLp 2 (V := I U → ℝ) fun
-    | Sum.inl (i, j) => p.w i j
+    | Sum.inl (i, j) => (p.w i j) / 2
     | Sum.inr i      => (p.θ i).get fin0
 
 /-- Inverse-temperature-scaled parameter vector. -/
@@ -52,7 +53,7 @@ noncomputable def statCoord (i : I U) (s : State ℝ U) : ℝ :=
 def coord (θ : Θ U) (i : I U) : ℝ :=
   (WithLp.ofLp θ) i
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

@@ -7,7 +7,7 @@ import HopfieldNet.BoltzmannLearningQuiver.VectorGibbs
 import HopfieldNet.BoltzmannLearningQuiver.VectorGibbsLearning
 import HopfieldNet.BoltzmannLearningQuiver.VectorGibbsConvexity
 import HopfieldNet.BoltzmannLearningQuiver.VectorGibbsDescent
-import HopfieldNet.BoltzmannLearningQuiver.SymmetricBinary
+import HopfieldNet.BoltzmannLearningQuiver.ZeroOne
 import HopfieldNet.BoltzmannLearningQuiver.Stat
 import HopfieldNet.BoltzmannLearningQuiver.Energy
 import HopfieldNet.BoltzmannLearningQuiver.Learning
@@ -36,7 +36,7 @@ Flagship theorems:
 * `CDConvergence.cdLearningDirection_tendsto_exactLearningDirection`
 * `Learning.convexOn_negLogLik`, `Learning.negLogLik_descent_step_scaled`
 
-Legacy: `HopfieldNet.ThreeD.BoltzmannLearning.SOTA`.
+Legacy: `HopfieldNet.ThreeD.BoltzmannLearning.SOTA` (`ZeroOneInstantiation`).
 -/
 
 #lint only docBlame docBlameThm

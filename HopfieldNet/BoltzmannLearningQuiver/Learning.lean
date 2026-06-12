@@ -17,7 +17,7 @@ Specializes `VectorGibbs` to quiver `State ℝ U`.
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open VectorGibbs Convex
 
@@ -76,7 +76,7 @@ theorem negLogLik_descent_step_scaled (T : Temperature) (s₀ : State ℝ U) (p 
     negLogLik_descent_step_gradient s₀ (scaledTheta T p) (by rwa [heq])
   exact ⟨η, hη, by simpa [learningDirection, heq] using hdec⟩
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

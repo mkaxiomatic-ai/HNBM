@@ -4,7 +4,8 @@ import HopfieldNet.Quiver.NeuralNetwork.TwoState
 /-!
 ## Optional bridge to `HopfieldNet.Quiver.NeuralNetwork.TwoState`
 
-This module connects Bool configurations to TwoState network states and packages
+This module connects Bool configurations to TwoState network states. With `NN := ZeroOne R U`,
+`false ↦ 0` and `true ↦ 1`; with `SymmetricBinary R U`, `false ↦ -1` (Hopfield spin encoding).
 `EnergySpec'` energies as `BM` models. It requires `Physlib`.
 
 Build separately when the TwoState dependency chain is available:

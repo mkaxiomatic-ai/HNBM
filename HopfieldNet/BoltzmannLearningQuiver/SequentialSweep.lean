@@ -17,7 +17,7 @@ namespace NeuralNetwork
 
 namespace BoltzmannLearningQuiver
 
-namespace SymmetricBinary
+namespace ZeroOne
 
 open MeasureTheory ProbabilityTheory TwoState HopfieldBoltzmann Matrix
 open scoped ProbabilityTheory
@@ -120,7 +120,7 @@ theorem same_stationaryMeasure_randomScan_and_sequentialSweep (order : List U)
   ⟨Kernel.Invariant.of_IsReversible (randomScanGibbsKernel_isReversible_negativePhase T p),
     sequentialSweepKernel_invariant_negativePhase order T p⟩
 
-end SymmetricBinary
+end ZeroOne
 
 end BoltzmannLearningQuiver
 

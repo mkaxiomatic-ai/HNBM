@@ -10,7 +10,10 @@ import MCMC.DetailedBalanceGen
 import Mathlib.Probability.Kernel.Composition.Prod
 import Physlib.StatisticalMechanics.CanonicalEnsemble.Finite
 
-/-! Concrete Hopfield Energy and Fintype Instances
+/-! Concrete Hopfield / BM energy and Fintype instances.
+
+**Note:** `symmetricBinaryEnergySpec` is the spin `{±1}` encoding (Hopfield). Canonical BM uses
+`zeroOneEnergySpec` in `BoltzmannMachine.lean`; this duplicate file is unused by `BMLearning`.
 -/
 
 namespace Matrix

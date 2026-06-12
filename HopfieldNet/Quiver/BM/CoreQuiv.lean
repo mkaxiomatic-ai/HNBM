@@ -10,14 +10,19 @@ import Mathlib.Order.CompletePartialOrder
 import Mathlib.Probability.Distributions.Uniform
 
 /-!
-# Boltzmann Machine Neural Network
+# Boltzmann Machine Neural Network (legacy quiver API)
+
+> **Note:** This module uses **spin activations `{±1}`** because it extends `HopfieldNetwork`
+> directly. The **canonical `{0,1}` BM development** for the paper and learning proofs lives in
+> `TwoState.ZeroOne`, `HopfieldEnergy.zeroOneHamiltonian`, and
+> `HopfieldNet.BoltzmannLearningQuiver`. This file is retained for the early quiver-layer API
+> imported by `HopfieldNet.lean`.
 
 This file defines Boltzmann Machines (BMs), a type of stochastic recurrent neural network with symmetric
 connectivity between units and no self-connections.
 
-
-This module extends the deterministic Hopfield network with stochastic dynamics: a fully‐connected,
-symmetric weight network without self‐loops and binary activations `{1, ‐1}`.
+This module extends the deterministic Hopfield network with stochastic dynamics: a fully connected,
+symmetric weight network without self-loops and **legacy spin** activations `{±1}`.
 We implement the Boltzmann Machine inside our `NeuralNetwork` framework, providing:
 
 • `BoltzmannMachine` : the network instance
@@ -25,9 +30,9 @@ We implement the Boltzmann Machine inside our `NeuralNetwork` framework, providi
 • `energy` / `localField` / `probNeuronIsOne` : key statistics
 • `gibbsUpdateSingleNeuron` / `gibbsSamplingStep` : Gibbs sampler
 
-## Mathematics
+## Mathematics (spin `{±1}` encoding)
 
-Boltzmann Machines have binary neurons (±1) with probability of activation determined by:
+Boltzmann Machines here use spin neurons `{±1}` with:
 - Energy function: $E(s) = -\frac{1}{2}\sum_{u,v, u \neq v} w_{u,v}s_u s_v - \sum_u \theta_u s_u$
 - Probability distribution: $P(s) \propto \exp(-E(s)/T)$ where $T$ is the temperature parameter
 - Local field for neuron $u$: $L_u(s) = \sum_{v \neq u} w_{u,v}s_v + \theta_u$

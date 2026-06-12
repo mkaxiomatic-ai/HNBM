@@ -16,7 +16,7 @@ import Physlib.StatisticalMechanics.CanonicalEnsemble.Finite
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open scoped BigOperators Temperature CanonicalEnsemble
 open CanonicalEnsemble Finset VectorGibbs InnerProductSpace Matrix TwoState HopfieldEnergy HopfieldBoltzmann
@@ -53,7 +53,7 @@ lemma CEparams_energy_eq_hamiltonian (p : Params ℝ U) (s : State ℝ U) :
     (CEparams (NN := NN ℝ U) (spec := energySpec) p).energy s = hamiltonian p s := by
   have _ : IsHamiltonian (NN := NN ℝ U) := IsHamiltonian_of_EnergySpec' energySpec
   simp [CEparams, hopfieldCE, toCanonicalEnsemble, energy_eq_spec, energySpec,
-    HopfieldEnergy.symmetricBinaryEnergySpec]
+    HopfieldEnergy.zeroOneEnergySpec]
 
 /-- Partition function equals sum of Boltzmann factors. -/
 lemma boltzmannPartitionFunction_eq_sum (T : Temperature) (p : Params ℝ U) :
@@ -77,7 +77,7 @@ theorem modelProbability_eq_boltzmannFactor_div_Z (T : Temperature) (p : Params 
       Real.exp (-(T.β : ℝ) * hamiltonian p s) /
         (CEparams (NN := NN ℝ U) (spec := energySpec) p).mathematicalPartitionFunction T := by
   simp [modelProbability, P, CEparams, CanonicalEnsemble.probability, hopfieldCE,
-    toCanonicalEnsemble, energy_eq_spec, energySpec, HopfieldEnergy.symmetricBinaryEnergySpec]
+    toCanonicalEnsemble, energy_eq_spec, energySpec, HopfieldEnergy.zeroOneEnergySpec]
 
 /-- Unnormalized `VectorGibbs` weight equals `modelProbability` times `Z`. -/
 theorem vectorGibbs_weight_eq_modelProbability_mul_Z (T : Temperature) (p : Params ℝ U) (s : State ℝ U) :
@@ -132,7 +132,7 @@ theorem modelExpectationStat_eq_boltzmannExpectationStat (T : Temperature) (p : 
   · congr 1; ext s
     rw [μProd_of_fintype (𝓒 := CEparams (NN := NN ℝ U) energySpec p) T s]
     simp [modelProbability, P, CEparams, CanonicalEnsemble.probability, hopfieldCE,
-      toCanonicalEnsemble, energy_eq_spec, energySpec, HopfieldEnergy.symmetricBinaryEnergySpec]
+      toCanonicalEnsemble, energy_eq_spec, energySpec, HopfieldEnergy.zeroOneEnergySpec]
   · exact MeasureTheory.Integrable.of_finite
 
 /-- `VectorGibbs` expectation equals `modelExpectationStat`. -/
@@ -141,7 +141,7 @@ theorem vectorGibbsExpectationStat_eq_modelExpectationStat (T : Temperature) (p 
   rw [vectorGibbsExpectationStat_eq_boltzmannExpectationStat,
     modelExpectationStat_eq_boltzmannExpectationStat]
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

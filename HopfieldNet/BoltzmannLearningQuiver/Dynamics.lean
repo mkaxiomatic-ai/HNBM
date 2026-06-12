@@ -2,7 +2,7 @@
 Copyright (c) 2025 HNBM contributors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.BoltzmannLearningQuiver.SymmetricBinary
+import HopfieldNet.BoltzmannLearningQuiver.ZeroOne
 import HopfieldNet.Quiver.BM.Ergodicity
 
 /-!
@@ -13,7 +13,7 @@ Single-site and sequential Gibbs updates for CD-k sampling.
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open TwoState HopfieldEnergy
 
@@ -29,7 +29,7 @@ noncomputable abbrev gibbsSweep {F} [FunLike F ℝ ℝ] (order : List U) (p : Pa
     (T : Temperature) (f : F) (s0 : State ℝ U) : PMF (State ℝ U) :=
   TwoState.gibbsSweep (R := ℝ) (U := U) (ζ := ℝ) (NN := NN ℝ U) order p T f s0
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

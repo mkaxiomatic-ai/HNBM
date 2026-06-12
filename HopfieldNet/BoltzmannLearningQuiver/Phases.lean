@@ -15,7 +15,7 @@ Negative phase = canonical Boltzmann measure; positive phase = Dirac at data.
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open scoped BigOperators Temperature CanonicalEnsemble
 open MeasureTheory ProbabilityTheory CanonicalEnsemble HopfieldBoltzmann BoltzmannLearningQuiver.BM
@@ -37,7 +37,7 @@ lemma modelProbability_nonneg (T : Temperature) (p : Params ℝ U) (s : State �
     0 ≤ modelProbability T p s := by
   haveI := instCEparamsIsFinite p
   simpa [modelProbability, CEparams, hopfieldCE, toCanonicalEnsemble, energy_eq_spec, energySpec,
-    HopfieldEnergy.symmetricBinaryEnergySpec] using
+    HopfieldEnergy.zeroOneEnergySpec] using
     probability_nonneg_finite (𝓒 := CEparams (NN := NN ℝ U) energySpec p) T s
 
 /-- Boltzmann probabilities sum to one. -/
@@ -45,7 +45,7 @@ lemma modelProbability_sum_one (T : Temperature) (p : Params ℝ U) :
     ∑ s : State ℝ U, modelProbability T p s = 1 := by
   haveI := instCEparamsIsFinite p
   simpa [modelProbability, CEparams, hopfieldCE, toCanonicalEnsemble, energy_eq_spec, energySpec,
-    HopfieldEnergy.symmetricBinaryEnergySpec] using
+    HopfieldEnergy.zeroOneEnergySpec] using
     sum_probability_eq_one (𝓒 := CEparams (NN := NN ℝ U) energySpec p) T
 
 /-- Negative phase: canonical Boltzmann measure at `(p, T)`. -/
@@ -88,7 +88,7 @@ theorem exactLearningDirection_eq_learningDirection (T : Temperature) (p : Param
     exactLearningDirection T p s_data = learningDirection T p s_data := by
   simp [exactLearningDirection, learningDirection, modelExpectationStat, expectationStat_pos_dirac]
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

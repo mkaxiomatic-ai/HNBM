@@ -12,7 +12,7 @@ Contrastive update `E_pos[stat] - E_neg[stat]` as a `BM.LearningRule`.
 
 namespace NeuralNetwork
 namespace BoltzmannLearningQuiver
-namespace SymmetricBinary
+namespace ZeroOne
 
 open MeasureTheory BoltzmannLearningQuiver.BM
 
@@ -53,7 +53,7 @@ theorem updateDirData_eq_learningDirection (T : Temperature) (p : Params ℝ U) 
     updateDirData T p s_data = learningDirection T p s_data := by
   rw [updateDirData_eq_exactLearningDirection, exactLearningDirection_eq_learningDirection]
 
-end SymmetricBinary
+end ZeroOne
 end BoltzmannLearningQuiver
 end NeuralNetwork
 

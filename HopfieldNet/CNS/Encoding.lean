@@ -86,13 +86,14 @@ def varsOfRow : Array (Array Nat) := Id.run do
 
 /-! ## The penalty -/
 
-/-- Encode a complete grid as the binary vector `x̄ ∈ {0,1}^{n³}`. -/
-def encode (g : Grid) : Array Bool := Id.run do
-  let mut x : Array Bool := Array.replicate numVars false
-  for c in [0:numCells] do
-    if let some k := g.get c then
-      x := x.set! (varIdx (rowOf c) (colOf c) k) true
-  return x
+/-- Encode a grid as the binary vector `x̄ ∈ {0,1}^{n³}`.
+
+Written as a `map` over variable indices rather than an accumulating loop: since
+`varIdx i j k = cellIdx i j * n + k`, the index `v` splits as cell `v / n` and digit `v % n`,
+and `x̄_v = 1` exactly when that cell holds that digit. Same function, but characterised in one
+step, which `CNS.Sound` needs. -/
+def encode (g : Grid) : Array Bool :=
+  (Array.range numVars).map fun v => g.get (v / n) == some (v % n)
 
 /-- Decode `x̄` back to a grid; a cell with anything other than exactly one `1` is left empty. -/
 def decode (x : Array Bool) : Grid := Id.run do

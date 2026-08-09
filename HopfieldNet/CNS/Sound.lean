@@ -231,6 +231,91 @@ theorem penalty_zero_iff_families (x : Array Bool) :
           exact hbox _ (by simp only [n, numRows] at *; omega)
             _ (by simp only [n] at *; omega)
 
+/-! ## From grids to the encoding
+
+`penalty_zero_iff_families` speaks about the `n³` encoding variables. These lemmas connect it to
+`Grid`, so that "the search reached `p(x) = 0`" and "this grid solves the puzzle" are provably
+the same statement rather than two things checked separately at runtime. -/
+
+/-- `encode` reads off the grid at each variable index. -/
+theorem encode_getD {g : Grid} {v : Nat} (hv : v < numVars) :
+    (encode g).getD v false = (g.get (v / n) == some (v % n)) := by
+  unfold encode
+  have hsz : ((Array.range numVars).map
+      (fun v => g.get (v / n) == some (v % n))).size = numVars := by simp
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by rw [hsz]; exact hv)]
+  simp
+
+/-- The variable index of digit `k` in cell `c`, split back into cell and digit. -/
+theorem cellDigit_of_varIdx {c k : Nat} (hc : c < numCells) (hk : k < n) :
+    (varIdx (rowOf c) (colOf c) k) / n = c ∧ (varIdx (rowOf c) (colOf c) k) % n = k := by
+  have h : varIdx (rowOf c) (colOf c) k = c * n + k := by
+    simp only [varIdx, rowOf, colOf, n, numCells] at *; omega
+  rw [h]
+  constructor <;> (simp only [n] at *; omega)
+
+/-- The encoding bit of digit `t` at cell `c`. -/
+private theorem encode_cell_bit {g : Grid} {c : Nat} (hc : c < numCells) {k : Nat}
+    (hgc : g.get c = some k) {t : Nat} (ht : t < n) :
+    (encode g).getD (varIdx (rowOf c) (colOf c) t) false = (t == k) := by
+  have hlt : varIdx (rowOf c) (colOf c) t < numVars := by
+    simp only [varIdx, rowOf, colOf, numVars, numCells, n] at *; omega
+  obtain ⟨hd, hm⟩ := cellDigit_of_varIdx hc ht
+  rw [encode_getD hlt, hd, hm, hgc]
+  cases hteq : t == k with
+  | true  => simp [(beq_iff_eq).mp hteq]
+  | false =>
+    have hne : t ≠ k := (beq_eq_false_iff_ne).mp hteq
+    simp [Ne.symm hne]
+
+/-- Digits other than the cell's own contribute nothing. -/
+private theorem countOn_absent {g : Grid} {c : Nat} (hc : c < numCells) {k : Nat}
+    (hgc : g.get c = some k) :
+    ∀ (l : List Nat) (a : Int), (∀ s ∈ l, s < n) → k ∉ l →
+      (l.map (fun s => varIdx (rowOf c) (colOf c) s)).foldl
+        (fun a v => if (encode g).getD v false then a + 1 else a) a = a := by
+  intro l
+  induction l with
+  | nil => intro a _ _; rfl
+  | cons s rest ih =>
+    intro a hlt hni
+    have hsn : s < n := hlt s (List.mem_cons_self ..)
+    have hsk : s ≠ k := fun h => hni (h ▸ List.mem_cons_self ..)
+    simp only [List.map_cons, List.foldl_cons, encode_cell_bit hc hgc hsn,
+      (beq_eq_false_iff_ne).mpr hsk, Bool.false_eq_true, if_false]
+    exact ih a (fun y hy => hlt y (List.mem_cons_of_mem _ hy))
+      (fun hy => hni (List.mem_cons_of_mem _ hy))
+
+/-- On a grid, the `n` variables of an assigned cell carry exactly one `1`.
+
+This is constraint (10a) holding automatically for any grid: a cell has one digit. -/
+theorem countOn_cellVars {g : Grid} {c : Nat} (hc : c < numCells) {k : Nat} (hk : k < n)
+    (hgc : g.get c = some k) :
+    countOn (encode g) (cellVars (rowOf c) (colOf c)) = 1 := by
+  unfold countOn cellVars
+  suffices h : ∀ (l : List Nat) (acc : Int), (∀ t ∈ l, t < n) → k ∈ l → l.Nodup →
+      (l.map (fun t => varIdx (rowOf c) (colOf c) t)).foldl
+        (fun a v => if (encode g).getD v false then a + 1 else a) acc = acc + 1 by
+    exact h (List.range n) 0 (fun t ht => List.mem_range.mp ht)
+      (List.mem_range.mpr hk) List.nodup_range
+  intro l
+  induction l with
+  | nil => intro acc _ hk0 _; exact absurd hk0 (by simp)
+  | cons t rest ih =>
+    intro acc hlt hmem hnd
+    have htn : t < n := hlt t (List.mem_cons_self ..)
+    simp only [List.map_cons, List.foldl_cons, encode_cell_bit hc hgc htn]
+    rcases List.mem_cons.mp hmem with heq | hmem'
+    · -- the head is the cell's digit; nothing after it contributes
+      subst heq
+      simp only [beq_self_eq_true, if_true]
+      exact countOn_absent hc hgc rest (acc + 1)
+        (fun y hy => hlt y (List.mem_cons_of_mem _ hy)) (List.nodup_cons.mp hnd).1
+    · have hne : t ≠ k := fun h => (List.nodup_cons.mp hnd).1 (h ▸ hmem')
+      simp only [(beq_eq_false_iff_ne).mpr hne, Bool.false_eq_true, if_false]
+      exact ih acc (fun y hy => hlt y (List.mem_cons_of_mem _ hy)) hmem'
+        (List.nodup_cons.mp hnd).2
+
 /-- A zero penalty forces the residual of every individual row to vanish — the direction the
 certificate check relies on. -/
 theorem residual_eq_zero_of_penalty_zero {x : Array Bool} (h : penaltyDoubled x = 0)

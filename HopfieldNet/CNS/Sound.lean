@@ -33,7 +33,8 @@ Two limits, stated because they are easy to overstate:
   (10e) — the givens — is unformalised, and the runtime certificate
   `sol.isSolution && g.extends' sol` is not yet connected to any of this by proof.
 
-Kept Mathlib-free like the rest of `CNS`, so it costs nothing to rebuild.
+Kept Mathlib-free, like everything under `CNS` except `CNS.Spec`, so it costs nothing to
+rebuild.
 -/
 
 namespace CNS

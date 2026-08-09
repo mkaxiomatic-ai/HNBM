@@ -29,7 +29,7 @@ vacuously `true` on an array shorter than `n²`. So `isSolution = true` alone do
 a grid is total. `Completes` therefore carries `WF` explicitly. Grids built by `Grid.ofString`
 and `Grid.assign` satisfy it, but the type does not enforce it.
 
-Mathlib-free, like the rest of `CNS`.
+Mathlib-free, like everything under `CNS` except `CNS.Spec`.
 -/
 
 namespace CNS

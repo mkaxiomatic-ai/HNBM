@@ -23,6 +23,9 @@ Subcommands:
 | `inner <inst> <model> [inner T0 eta seed]` | Fig. 2: inner-loop transient |
 | `fig3 <inst> <model> [seed]` | Fig. 3: outer-loop convergence of `p(x*)` |
 | `fig9 <inst> <model> [runs] [Ns] [Ms]` | Fig. 9: Monte Carlo over an `(M,N)` grid |
+| `count` | solution counts, and the exact solver as a baseline |
+| `figs` | Figs 4-8: givens / after reduction with candidates / solved |
+| `puzzle <81 chars> [model] [seeds]` | validate, reduce and solve your own grid |
 | `bench` | microbenchmarks of the primitives the inner loops depend on |
 | `all` | `table1` then `encoding` |
 

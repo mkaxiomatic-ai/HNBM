@@ -7,7 +7,7 @@ reproduction of Li & Wang, *Collaborative Neurodynamic Algorithms for Solving Su
 
 ## Building
 
-Lean **v4.30.0** and Mathlib **v4.30.0** (both pinned in `lean-toolchain` and `lakefile.lean`).
+Lean **v4.32.2** and Mathlib **v4.32.2** (both pinned in `lean-toolchain` and `lakefile.lean`).
 Install via [elan](https://leanprover-community.github.io/get_started.html), then:
 
 ```bash
@@ -45,6 +45,8 @@ lake exe cns complete all  # solve and verify all ten instances end to end
 lake exe cns count         # solution counts, and the exact solver as a baseline
 lake exe cns figs          # Figs 4-8: givens / after reduction with candidates / solved
 lake exe cns puzzle "<81 chars>"   # your own puzzle: validate, reduce, search
+lake exe cns hard 6 170 1  # generated hard corpus, certified solver, route breakdown
+lake exe cns prototype "<81 chars>"   # solve one puzzle end to end, always certificate-checked
 ```
 
 `solve`, `trace`, `inner`, `fig3`, `fig9` and `bench` expose individual experiments; run
@@ -62,22 +64,87 @@ lake exe cns puzzle "<81 chars>"   # your own puzzle: validate, reduce, search
 
 ### What is proved
 
+Everything below is proved outright — no `sorry`, and `#print axioms` reports only
+`propext`, `Classical.choice`, `Quot.sound`.
+
+**The reduction and the encoding**
+
 | Theorem | Statement |
 |---|---|
 | `reduce_completions` | Algorithm 1 preserves the solution set exactly, so Table I counts variables safely deleted rather than solutions discarded |
 | `penalty_zero_iff_families` | `p(x) = 0` iff each cell holds one digit and each digit occurs once per row, column and block — constraints (10a)–(10d) |
 | `penalty_encode_eq_zero` | a solved grid encodes to zero penalty |
-| `Spec.quboParams` | the QUBO is an instance of the repository's `TwoState.ZeroOne` network, with `pm` (symmetry and zero diagonal) discharged |
 
-Verified executably but **not** proved: the reduced-objective bridge
-`Problem.penaltyDoubled P x = CNS.penaltyDoubled (P.embed x)` (1000 random trials per instance,
-re-checked by `cns reduced`), and the converse `p(x) = 0 → isSolution` (exercised by the
-certificate check on every solve).
+**The network** — the search is not *modelled by* an HNBM network, it *is* one
 
-Not formalized: the paper's three theoretical claims about convergence. For the *momentum*
-variants of eqs (3) and (6) the corresponding theory does not exist in the literature — the
-classical results (Goles–Chacc for synchronous threshold networks, Little–Peretto for the
-parallel Boltzmann machine) do not apply to an undamped accumulator.
+| Theorem | Statement |
+|---|---|
+| `Problem.netParams` | the **reduced** QUBO — the instance the solver actually runs on — is a `TwoState.ZeroOne ℝ (Fin nvars)`, with `pm` (symmetry, zero diagonal) discharged structurally |
+| `Problem.ofGrid_valid` | every instance the pipeline builds satisfies the structural invariants the above needs, so the bridge is unconditional rather than hypothetical |
+| `Problem.zeroOneHamiltonian_eq` | HNBM's `{0,1}` Boltzmann Hamiltonian at those parameters **is** the paper's objective: `E(x̂) = ½‖Âx̂ − b̂‖² − ½‖b̂‖²` |
+| `Problem.netVec_eq_localField` | the `O(nvars)` integer routine in the inner loop computes exactly `s.net − θ̂`, HNBM's local field — the object that runs is the object proved about |
+| `Problem.rowSums_spec` | the row-sum scatter counts the set variables of each constraint row |
+| `Problem.stateOfBits_stepAt` | one memoryless single-site update on the bit array **is** `NeuralNetwork.State.Up` |
+| `Problem.stateOfBits_workPhase` | a scan over a list of neurons is the library's `workPhase` |
+| `mem_varsOfRowSpec_iff` | `A` read by rows agrees with `A` read by columns — what `cns encoding` checked numerically as `specMatchesTable` |
+| `Problem.penaltyDoubled_embed` | the reduced objective the search descends **is** the paper's `‖Ax − e‖²` under `embed` |
+
+**The consequence** — minimising the HNBM energy *is* solving the puzzle
+
+| Theorem | Statement |
+|---|---|
+| `Problem.energy_eq_min_iff` | a state attains the minimum energy exactly when its reduced penalty vanishes: the global minimisers are exactly the feasible assignments |
+| `Problem.half_le_energy_sub_min` | the energy gap is at least `1/2` — the objective is integer-valued, so a miss is never by a small amount |
+| `Problem.boltzmann_ratio_le` | an infeasible state's Boltzmann weight is suppressed by at least `exp(−1/2T)` relative to a feasible one, and that factor → 0 as `T` → 0 |
+
+Together with `Ergodicity.RSrow_stationary_unique_eq_πBoltzVec` — the random-scan Gibbs chain has
+a unique stationary distribution and it is the Boltzmann measure of this energy — that is the
+sense in which the annealed Boltzmann machine concentrates on the solutions.
+
+Verified executably but **not** proved: the converse `p(x) = 0 → isSolution` at grid level
+(exercised by the certificate check on every solve; the variable-level direction is
+`penalty_zero_iff_families`).
+
+Not formalized: the paper's three theoretical claims about convergence. Those are about the
+*momentum* recurrences of eqs (3) and (6), which are undamped accumulators, are not `Up` of any
+HNBM network, and for which no theory exists — the classical results (Goles–Chacc for
+synchronous threshold networks, Little–Peretto for the parallel Boltzmann machine) do not apply.
+Everything proved above concerns the memoryless single-site reading. Note that
+`Dynamics.seqRun` keeps the accumulator even in its asynchronous mode; `Problem.stepAt` is the
+memoryless step the refinement theorems are about, and the distinction is stated at both.
+
+### Synchronous or asynchronous: a measured trade
+
+Only the asynchronous reading is an HNBM network, so only it inherits the theory. Six seeds on
+Sabuncu3 (BMm, `N = 40`, `M = 50`):
+
+| configuration | solved | ms/run |
+|---|---|---|
+| synchronous, `inner = 60`, `η = 0.9` (the paper's) | 6/6 | 721 |
+| asynchronous, same schedule | 5/6 | 1923 |
+| asynchronous, `inner = 200`, `η = 0.97` | 6/6 | 2340 |
+
+Slowing the schedule closes the reliability gap exactly; nothing tried closes the ~3× wall-clock
+gap, and cutting sweeps or swarm size loses runs immediately. That is the honest shape of it:
+the covered-by-theory variant costs about 3× the time. Details at `ModelConfig.sequential`.
+
+### A corpus hard enough to test the solver, and a solver that is never wrong
+
+Four of the ten Sabuncu instances are closed by propagation alone, so "10/10" on that set says
+little. `cns hard` generates proper puzzles from a seed — no external data — and reports which
+stage solved each one. On six generated instances of post-reduction dimension 170–210:
+
+```
+solved by propagation alone   0/6
+solved by the neurodynamics   4/6
+needed the exact fallback     2/6
+verified completions          6/6
+```
+
+`solveCertified` accepts a search result only if it passes `accepts` (`isSolution` together with
+the givens), and falls back to the exact solver otherwise. So the neurodynamics changes how
+often the fast path succeeds, never whether the answer is right. For calibration: the exact
+solver finishes these in tens of milliseconds where the neurodynamic route takes 2–10 seconds.
 
 ### What the paper omits, and what we had to supply
 

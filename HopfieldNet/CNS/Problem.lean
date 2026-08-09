@@ -59,49 +59,83 @@ structure Problem where
 
 namespace Problem
 
-/-- Build the reduced instance from the output of Algorithm 1. -/
-def ofReduced (R : Reduced) : Problem := Id.run do
-  -- surviving variables, in increasing order of their original index
-  let varOf := (Array.range numVars).filter fun v => !(R.isFixed.getD v false)
-  let mut idxOf : Array Nat := Array.replicate numVars 0
-  let mut present : Array Bool := Array.replicate numVars false
-  for u in [0:varOf.size] do
-    let v := varOf.getD u 0
-    idxOf := idxOf.set! v u
-    present := present.set! v true
-  -- b̂ = e − A_F s : subtract the contribution of variables already pinned to 1
-  let mut bhat : Array Int := Array.replicate numRows 1
-  for v in [0:numVars] do
-    if R.isFixed.getD v false && R.fixedVal.getD v false then
-      for r in rowsOfVar v do
-        bhat := bhat.set! r ((bhat.getD r 0) - 1)
-  -- restrict each row to its surviving variables
-  let mut varsOf : Array (Array Nat) := Array.replicate numRows #[]
-  for u in [0:varOf.size] do
-    let v := varOf.getD u 0
-    for r in rowsOfVar v do
-      varsOf := varsOf.set! r ((varsOf.getD r #[]).push u)
-  -- rowsOf and θ̂
-  let mut rowsOf : Array (Array Nat) := Array.replicate varOf.size #[]
-  let mut theta : Array Int := Array.replicate varOf.size 0
-  for u in [0:varOf.size] do
-    let rs := rowsOfVar (varOf.getD u 0)
-    rowsOf := rowsOf.set! u rs
-    theta := theta.set! u (2 - rs.foldl (fun acc r => acc + bhat.getD r 0) 0)
-  let constDoubled := bhat.foldl (fun acc bi => acc + bi * bi) 0
-  return { nvars := varOf.size, varOf := varOf, rowsOf := rowsOf, varsOf := varsOf,
-           bhat := bhat, theta := theta, constDoubled := constDoubled, base := R.grid }
+/-- Which original variables Algorithm 1 pinned to `1`; the paper's `s` restricted to its
+support. -/
+def pinnedOnes (R : Reduced) : Array Bool :=
+  (Array.range numVars).map fun v => R.isFixed.getD v false && R.fixedVal.getD v false
+
+/-- The surviving variables, in increasing order of their original index.
+
+Built through `List.filter` rather than `Array.filter` on purpose. `Array.filter` carries an
+optional `stop := as.size` argument, so unifying against it forces `(Array.range numVars).size`
+to be evaluated, and every proof that mentions this definition then times out in `whnf`.
+`List.filter` takes no such argument. -/
+def survivors (R : Reduced) : Array Nat :=
+  ((List.range numVars).filter fun v => !(R.isFixed.getD v false)).toArray
+
+/-- `b̂ = e − A_F s`: one less than `1` for each pinned-to-one variable occurring in the row.
+
+The four rows of a variable are distinct (`Problem.rowsOfVar_nodup`), so no row loses two units
+for the same variable and the count is exactly the contribution the deleted columns carried. -/
+def bhatRow (pinned : Array Bool) (r : Nat) : Int :=
+  1 - ((List.range numVars).countP fun v => pinned.getD v false && (rowsOfVar v).contains r : Int)
+
+/-- `b̂`, one entry per constraint row. -/
+def bhatOf (R : Reduced) : Array Int := (Array.range numRows).map (bhatRow (pinnedOnes R))
+
+/-- Deleting columns leaves the rows alone, so a survivor keeps its four original rows. -/
+def rowsOfSurv (R : Reduced) : Array (Array Nat) := (survivors R).map rowsOfVar
+
+/-- The surviving variables of one constraint row, in increasing reduced index. -/
+def rowMembers (varOf : Array Nat) (r : Nat) : Array Nat :=
+  ((List.range varOf.size).filter fun u => (rowsOfVar (varOf.getD u 0)).contains r).toArray
+
+/-- Each constraint row restricted to its surviving variables. -/
+def varsOfSurv (R : Reduced) : Array (Array Nat) :=
+  (Array.range numRows).map (rowMembers (survivors R))
+
+/-- `θ̂_u = 2 − Σ_{r ∋ u} b̂_r` for one variable's row set. -/
+def thetaRow (bhat : Array Int) (rs : Array Nat) : Int :=
+  2 - rs.foldl (fun acc r => acc + bhat.getD r 0) 0
+
+/-- `θ̂`, no longer constant once `b̂` varies row by row. -/
+def thetaOf (R : Reduced) : Array Int := (rowsOfSurv R).map (thetaRow (bhatOf R))
+
+/-- Build the reduced instance from the output of Algorithm 1.
+
+Every field is a `map` or `filter` over an index range rather than a scatter loop accumulating
+with `set!`, and each is a named top-level function rather than a `let` in this body. Both
+choices are deliberate and neither costs anything here — `ofReduced` runs once per puzzle, not
+once per sweep. Together they make `Problem.Valid` provable pointwise: a field projection is
+`rfl` with nothing to evaluate, and a `map` is characterised by `Array.getElem_map`, whereas a
+`set!` loop can only be characterised by an induction over its trip count. This is the same
+rewrite `buildFlags` received for `CNS.ReduceSound`. -/
+def ofReduced (R : Reduced) : Problem where
+  nvars := (survivors R).size
+  varOf := survivors R
+  rowsOf := rowsOfSurv R
+  varsOf := varsOfSurv R
+  bhat := bhatOf R
+  theta := thetaOf R
+  constDoubled := (bhatOf R).foldl (fun acc bi => acc + bi * bi) 0
+  base := R.grid
 
 /-- Run Algorithm 1 and build the reduced instance. -/
 def ofGrid (g : Grid) : Problem := ofReduced (reduce g)
 
-/-- Row sums `ρ_r = Σ_{v ∈ r} x̂_v`. -/
+/-- Row sums `ρ_r = Σ_{v ∈ r} x̂_v`.
+
+The `if` sits inside the assignment and the inner loop is a written-out `Array.foldl`. Both are
+cosmetic at run time — the compiled code is the same scatter — but they matter for proofs: the
+`@[simp]` lemma `List.forIn_pure_yield_eq_foldl` only matches a loop body of the shape
+`fun u ρ => pure (.yield _)`, and an `if` wrapped around the `pure` blocks it. With this shape
+`simp [Id.run]` turns the loop into a `List.foldl` that ordinary list induction can handle. -/
 @[inline] def rowSums (P : Problem) (x : Array Bool) : Array Int := Id.run do
   let mut ρ : Array Int := Array.replicate numRows 0
   for u in [0:P.nvars] do
-    if x.getD u false then
-      for r in P.rowsOf.getD u #[] do
-        ρ := ρ.set! r ((ρ.getD r 0) + 1)
+    ρ := if x.getD u false then
+           (P.rowsOf.getD u #[]).foldl (fun ρ r => ρ.set! r ((ρ.getD r 0) + 1)) ρ
+         else ρ
   return ρ
 
 /-- `‖Â x̂ − b̂‖²`, i.e. twice the paper's `p(x̂)`. Zero exactly when `x̂` solves the puzzle. -/
@@ -113,14 +147,11 @@ def penaltyDoubled (P : Problem) (x : Array Bool) : Int :=
 /-- The net input `W x̂ − θ̂` driving (1), (3) and (6).
 
 Uses `(W x̂)_u = 4 x̂_u − Σ_{r ∋ u} ρ_r`, so the whole vector costs `O(nvars)`. -/
-def netVec (P : Problem) (x : Array Bool) : Array Int := Id.run do
+def netVec (P : Problem) (x : Array Bool) : Array Int :=
   let ρ := P.rowSums x
-  let mut out : Array Int := Array.replicate P.nvars 0
-  for u in [0:P.nvars] do
+  (Array.range P.nvars).map fun u =>
     let s := (P.rowsOf.getD u #[]).foldl (fun acc r => acc + ρ.getD r 0) 0
-    let wx := (if x.getD u false then (4 : Int) else 0) - s
-    out := out.set! u (wx - P.theta.getD u 0)
-  return out
+    ((if x.getD u false then (4 : Int) else 0) - s) - P.theta.getD u 0
 
 /-- Write a reduced assignment back into a full grid, on top of the Algorithm 1 base. -/
 def toGrid (P : Problem) (x : Array Bool) : Grid := Id.run do
@@ -142,6 +173,14 @@ def openCellGroups (P : Problem) : Array (Array Nat) := Id.run do
     byCell := byCell.set! c ((byCell.getD c #[]).push u)
   return byCell.filter (fun grp => grp.size != 0)
 
+/-- The reduced index of an original variable, when it survived the reduction.
+
+A linear scan, which is fine: `embed` runs in the consistency checks, never in a sweep. Written
+as a lookup rather than as a scatter with `set!` for the usual reason — `Array.getElem_map` and
+`List.find?` are characterised pointwise, a scatter only by induction on its trip count. -/
+def redIndex (P : Problem) (v : Nat) : Option Nat :=
+  (List.range P.nvars).find? fun u => P.varOf.getD u 0 == v
+
 /-- Embed a reduced assignment back into the full `n³` vector, filling the eliminated
 coordinates with the values Algorithm 1 pinned them to.
 
@@ -152,11 +191,12 @@ This is the map along which the reduced objective should agree with the unreduce
 
 so `Problem.penaltyDoubled P x̂` and `CNS.penaltyDoubled (P.embed x̂)` should be equal. That is
 the bridge between what the solver minimises and what `CNS.Sound` proves about. -/
-def embed (P : Problem) (fixedVal : Array Bool) (x : Array Bool) : Array Bool := Id.run do
-  let mut full := fixedVal
-  for u in [0:P.nvars] do
-    full := full.set! (P.varOf.getD u 0) (x.getD u false)
-  return full
+def embed (P : Problem) (fixedVal : Array Bool) (x : Array Bool) : Array Bool :=
+  (Array.range numVars).map fun v =>
+    match P.redIndex v with
+    | some u => x.getD u false
+    | none   => fixedVal.getD v false
+
 
 /-- Number of off-diagonal neighbours of a surviving variable (≤ 28). -/
 def degree (P : Problem) (u : Nat) : Nat :=

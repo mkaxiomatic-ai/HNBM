@@ -63,9 +63,10 @@ theorem foldl_count_cast (F : Nat → Bool) : ∀ (l : List Nat) (a : Nat),
 
 The left side is the constraint row of `A`; the right side is what `Grid.isConsistent`
 constrains. They are the same sum. -/
-theorem countOn_unit_eq {g : Grid} (cells : Nat → Nat) (vars : Nat → Nat) {k : Nat}
-    (hagree : ∀ t, t < n → (encode g).getD (vars t) false = (g.get (cells t) == some k)) :
-    countOn (encode g) ((List.range n).map vars)
+theorem countOn_unit_eq {g : Grid} (y : Array Bool) (cells : Nat → Nat) (vars : Nat → Nat)
+    {k : Nat}
+    (hagree : ∀ t, t < n → y.getD (vars t) false = (g.get (cells t) == some k)) :
+    countOn y ((List.range n).map vars)
       = (((List.range n).map cells).foldl
           (fun acc c => if g.get c == some k then acc + 1 else acc) 0 : Nat) := by
   rw [foldl_count_cast]
@@ -73,7 +74,7 @@ theorem countOn_unit_eq {g : Grid} (cells : Nat → Nat) (vars : Nat → Nat) {k
   rw [List.foldl_map, List.foldl_map]
   -- both sides now fold over `range n` with pointwise-equal predicates
   have : ∀ (l : List Nat) (a : Int), (∀ t ∈ l, t < n) →
-      l.foldl (fun acc t => if (encode g).getD (vars t) false then acc + 1 else acc) a
+      l.foldl (fun acc t => if y.getD (vars t) false then acc + 1 else acc) a
         = l.foldl (fun acc t => if g.get (cells t) == some k then acc + 1 else acc) a := by
     intro l
     induction l with
@@ -94,7 +95,7 @@ theorem countOn_colVars {g : Grid} (hcons : g.isConsistent = true) {j k : Nat}
     unfold colCells; simp
   rw [hcells] at hcount
   unfold colVars
-  rw [countOn_unit_eq (fun r => cellIdx r j) (fun i => varIdx i j k)
+  rw [countOn_unit_eq (encode g) (fun r => cellIdx r j) (fun i => varIdx i j k)
     (fun t ht => encode_at ht hj hk), hcount]
   rfl
 
@@ -107,7 +108,7 @@ theorem countOn_rowVars {g : Grid} (hcons : g.isConsistent = true) {i k : Nat}
     unfold rowCells; simp
   rw [hcells] at hcount
   unfold rowVars
-  rw [countOn_unit_eq (fun c => cellIdx i c) (fun j => varIdx i j k)
+  rw [countOn_unit_eq (encode g) (fun c => cellIdx i c) (fun j => varIdx i j k)
     (fun t ht => encode_at hi ht hk), hcount]
   rfl
 
@@ -122,7 +123,7 @@ theorem countOn_boxVars {g : Grid} (hcons : g.isConsistent = true) {b k : Nat}
     unfold boxCells; simp
   rw [hcells] at hcount
   unfold boxVars
-  rw [countOn_unit_eq
+  rw [countOn_unit_eq (encode g)
       (fun t => cellIdx ((b / blk) * blk + t / blk) ((b % blk) * blk + t % blk))
       (fun t => varIdx ((b / blk) * blk + t / blk) ((b % blk) * blk + t % blk) k)
       (fun t ht => encode_at (by simp only [blk, n] at *; omega)

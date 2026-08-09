@@ -95,16 +95,20 @@ step, which `CNS.Sound` needs. -/
 def encode (g : Grid) : Array Bool :=
   (Array.range numVars).map fun v => g.get (v / n) == some (v % n)
 
-/-- Decode `x̄` back to a grid; a cell with anything other than exactly one `1` is left empty. -/
-def decode (x : Array Bool) : Grid := Id.run do
-  let mut cells : Array (Option Nat) := Array.replicate numCells none
-  for c in [0:numCells] do
-    let i := rowOf c
-    let j := colOf c
-    let hits := (Array.range n).filter fun k => x.getD (varIdx i j k) false
-    if hits.size == 1 then
-      cells := cells.set! c (hits[0]?)
-  return ⟨cells⟩
+/-- The digits `x̄` sets in cell `c`. -/
+def hitsAt (x : Array Bool) (c : Nat) : List Nat :=
+  (List.range n).filter fun k => x.getD (varIdx (rowOf c) (colOf c) k) false
+
+/-- Decode `x̄` back to a grid; a cell with anything other than exactly one `1` is left empty.
+
+A `map` over cell indices rather than a scatter loop, and a match on the singleton list rather
+than a size test — same function, but characterised pointwise by `Array.getElem_map`, which is
+what `CNS.DecodeSound` needs. -/
+def decode (x : Array Bool) : Grid :=
+  ⟨(Array.range numCells).map fun c =>
+    match hitsAt x c with
+    | [k] => some k
+    | _   => none⟩
 
 /-! ### The constraint rows, by explicit formula
 

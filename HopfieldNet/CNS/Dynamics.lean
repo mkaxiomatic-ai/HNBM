@@ -115,13 +115,38 @@ structure ModelConfig where
   Cost is unchanged: flipping `x_u` touches only the four rows containing `u`, so the row sums
   are maintained incrementally in `O(1)` per neuron.
 
-  **Off by default: the synchronous reading is both faithful and better.** For the BMm the two
-  are close, but for the DHNm the difference is decisive -- on Sabuncu3 at `N = 200` the
-  synchronous update solves 10/10 where the asynchronous one manages 6/10. The momentum term of
-  eq. (3) is what makes this work: it is precisely the device Takefuji and Lee introduced to
-  tame the oscillation a synchronous update would otherwise suffer, so removing the synchrony
-  discards the reason the momentum is there. The asynchronous variant is kept because it is the
-  reading under which HNBM's existing single-site theory would apply. -/
+  **Off by default, but the reason is speed, not reliability.**
+
+  The asynchronous reading is the one that *is* an HNBM network: `CNS.Refine.netVec_eq_localField`
+  shows the net input is `ZeroOne`'s local field, so the single-site sweep is a `State.Up`
+  sequence and inherits the detailed-balance and ergodicity results of
+  `HopfieldNet.Quiver.BM`. `CNS.Minimizers` then says the objective it descends has the solved
+  grids as its exact minimisers, with an energy gap of at least `1/2`.
+
+  Its cost is that it needs a slower annealing schedule. The paper's `inner = 60, η = 0.9` drops
+  `T` by a factor of 600 in 60 sweeps, which is far too fast for a single-site sampler; under it
+  the asynchronous BMm solves 5/6 on Sabuncu3 where the synchronous one solves 6/6. Measured
+  over six seeds on Sabuncu3 (BMm, `N = 40`, `M = 50`):
+
+  | configuration | solved | ms/run |
+  |---|---|---|
+  | synchronous, `inner = 60`, `η = 0.9` | 6/6 | 721 |
+  | asynchronous, `inner = 60`, `η = 0.9` | 5/6 | 1923 |
+  | asynchronous, `inner = 200`, `η = 0.97` | **6/6** | 2340 |
+  | asynchronous, `inner = 300`, `T₀ = 2`, `η = 0.98` | **6/6** | 2240 |
+  | asynchronous, `inner = 100`, `η = 0.94` | 4/6 | 1981 |
+  | asynchronous, `inner = 120`, `η = 0.95`, `N = 20` | 4/6 | 1263 |
+
+  So slowing the schedule closes the *reliability* gap exactly, and nothing tried closes the
+  ~3x *wall-clock* gap: cutting sweeps or shrinking the swarm loses runs immediately. That is
+  the expected shape of the trade. The momentum term of eq. (3) is precisely the device Takefuji
+  and Lee introduced to tame the oscillation a synchronous update would otherwise suffer, so
+  discarding synchrony discards the reason the momentum is there, and the sweeps have to be paid
+  for instead.
+
+  The choice is therefore explicit rather than hidden: `sequential := false` is faster,
+  `sequential := true` with `inner ≈ 200, η ≈ 0.97` is equally reliable and is the variant the
+  theory covers. -/
   sequential : Bool := false
   deriving Inhabited
 

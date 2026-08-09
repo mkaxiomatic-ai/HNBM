@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import HopfieldNet.CNS.Search
 import HopfieldNet.CNS.Exact
 import HopfieldNet.CNS.Instances
+import HopfieldNet.CNS.Solver
 
 /-!
 # `lake exe cns` — reproduce the paper's results
@@ -18,6 +19,8 @@ Subcommands:
 | `reduced` | net input of the reduced problem vs finite differences of its penalty |
 | `table2 [runs] [instance]` | Table II: both algorithms, every solution certificate-checked |
 | `complete [instance/all] [attempts] ...` | end to end from givens to a verified grid |
+| `hard [count] [minDim] [seed] ...` | generated corpus of hard proper puzzles, certified solver, route breakdown |
+| `prototype "<81 chars>" ...` | solve one puzzle end to end, always certificate-checked |
 | `solve <inst> <dhnm/bmm> [N M inner T0 eta runs Pm T annealOuter c0 c1 c2 seq]` | one configuration, repeated |
 | `trace <inst> <model> [N M inner T0 eta seed]` | per-outer-iteration swarm diagnostics |
 | `inner <inst> <model> [inner T0 eta seed]` | Fig. 2: inner-loop transient |
@@ -644,6 +647,89 @@ def runComplete (which : Option String) (attempts : Nat) (cfg : SearchConfig) : 
   IO.println s!"{nOk}/{entries.size} completed and verified against their givens."
   return nOk == entries.size
 
+/-! ## A harder corpus, and the certified solver
+
+`table1`–`table2` reproduce the paper. These two commands answer the question the paper does not
+ask: how does the method do on instances that are actually hard, and what happens when it
+fails? -/
+
+/-- Generate a corpus and run the certified solver on it, reporting which stage succeeded.
+
+The point of the table is the `route` column. Every row is a *verified* completion regardless of
+which stage produced it, so the neurodynamic column measures reach, not correctness. -/
+def runHard (count : Nat) (minDim : Nat) (seedN : Nat) (mdl : Model) (restarts : Nat) :
+    IO Bool := do
+  IO.println s!"Generated corpus -- {count} proper puzzles with post-reduction dimension >= {minDim}"
+  IO.println s!"model {mdl.name}, {restarts} restart(s) before the exact fallback"
+  IO.println ""
+  IO.println "  #  givens   dim   route                     ms   verified"
+  let mut g := Rng.seed (UInt64.ofNat (seedN + 1))
+  let mut nNeuro := 0
+  let mut nProp := 0
+  let mut nFall := 0
+  let mut nOk := 0
+  let mut made := 0
+  for i in [0:count] do
+    let (p?, g') := genHard g minDim 40
+    g := g'
+    match p? with
+    | none => IO.println s!"  {i}  (no instance at that dimension in 40 tries)"
+    | some q =>
+      made := made + 1
+      let t0 ← IO.monoMsNow
+      let out := solveCertified q.grid mdl restarts
+      -- force the whole computation inside the timed region: `out` is a pure `let`, and
+      -- inspecting a field is what actually runs the search
+      let verified :=
+        match out.solution with
+        | some sol => accepts q.grid sol
+        | none => false
+      let t1 ← IO.monoMsNow
+      match out.route with
+      | .propagation => nProp := nProp + 1
+      | .neurodynamic _ => nNeuro := nNeuro + 1
+      | .exactFallback => nFall := nFall + 1
+      | .unsolvable => pure ()
+      if verified then nOk := nOk + 1
+      IO.println s!"  {i}  {pad (Nat.repr q.givens) 6} {pad (Nat.repr q.dim) 5}   \
+        {pad out.route.name 22} {pad (Nat.repr (t1 - t0)) 5}   {if verified then "yes" else "NO"}"
+  IO.println ""
+  IO.println s!"solved by propagation alone   {nProp}/{made}"
+  IO.println s!"solved by the neurodynamics   {nNeuro}/{made}"
+  IO.println s!"needed the exact fallback     {nFall}/{made}"
+  IO.println s!"verified completions          {nOk}/{made}"
+  IO.println ""
+  IO.println "Every reported completion passes `accepts` -- `isSolution` together with the givens."
+  return nOk == made && made == count
+
+/-- Solve one user-supplied puzzle end to end, always verified. -/
+def runPrototype (spec : String) (mdl : Model) (restarts : Nat) : IO Bool := do
+  match Grid.ofString spec with
+  | none =>
+    IO.println s!"expected {numCells} characters ('1'-'9' for a given, any other for empty); \
+      got {spec.length}"
+    return false
+  | some g =>
+    IO.println s!"puzzle: {g.numGivens} givens"
+    IO.println g.pretty
+    IO.println ""
+    let t0 ← IO.monoMsNow
+    let out := solveCertified g mdl restarts
+    let ok := match out.solution with | some sol => accepts g sol | none => false
+    let t1 ← IO.monoMsNow
+    IO.println s!"post-reduction dimension: {out.dim}"
+    IO.println s!"route: {out.route.name}   ({t1 - t0} ms)"
+    match out.solution with
+    | none =>
+      IO.println "no completion exists (exact solver)"
+      return false
+    | some sol =>
+      IO.println ""
+      IO.println sol.pretty
+      IO.println ""
+      IO.println s!"certificate: {if ok then "valid completion of the givens" else "REJECTED"}"
+      return ok
+
 def main (args : List String) : IO UInt32 := do
   let cmd := args.headD "all"
   let ok ←
@@ -734,6 +820,18 @@ def main (args : List String) : IO UInt32 := do
           { N := nat 2 50, M := nat 3 100,
             model := ModelConfig.tabulate
               { innerIters := nat 4 80, T0 := flt 5 5.0, eta := flt 6 0.95 } }
+    | "hard"     =>
+        -- hard [count] [minDim] [seed] [dhnm|bmm] [restarts]
+        let a := args.tail
+        let nat (i : Nat) (d : Nat) : Nat := ((a.getD i "").toNat?).getD d
+        runHard (nat 0 10) (nat 1 300) (nat 2 0)
+          (if a.getD 3 "bmm" == "dhnm" then Model.dhnm else Model.bmm) (nat 4 4)
+    | "prototype" =>
+        -- prototype "<81 chars>" [dhnm|bmm] [restarts]
+        let a := args.tail
+        runPrototype (a.headD "")
+          (if a.getD 1 "bmm" == "dhnm" then Model.dhnm else Model.bmm)
+          (((a.getD 2 "").toNat?).getD 4)
     | "all"      => do
         let a ← runTable1
         IO.println ""
@@ -743,6 +841,6 @@ def main (args : List String) : IO UInt32 := do
         pure (a && b)
     | other      => do
         IO.println s!"unknown subcommand '{other}'; expected one of: \
-          table1, encoding, reduced, table2, complete, count, figs, puzzle, solve, trace, inner, fig3, fig9, bench, all"
+          table1, encoding, reduced, table2, complete, count, figs, puzzle, solve, trace, inner, fig3, fig9, bench, hard, prototype, all"
         pure false
   return (if ok then 0 else 1)

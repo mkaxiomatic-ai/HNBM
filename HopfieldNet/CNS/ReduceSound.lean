@@ -69,9 +69,7 @@ theorem usedByPeers_spec (g : Grid) (c k : Nat) (hk : k < n) :
     (usedByPeers g c).getD k false = true ↔ ∃ p ∈ (peers c).toList, g.get p = some k := by
   unfold usedByPeers
   suffices h : ∀ (l : List Nat) (acc : Array Bool), acc.size = n →
-      ((l.foldl (fun a p => match g.get p with
-                            | some d => a.set! d true
-                            | none => a) acc).getD k false = true
+      ((l.foldl (markUsed g) acc).getD k false = true
         ↔ acc.getD k false = true ∨ ∃ p ∈ l, g.get p = some k) by
     have hbase : (Array.replicate n false).getD k false = false := by
       rw [Array.getD_eq_getD_getElem?]
@@ -90,7 +88,7 @@ theorem usedByPeers_spec (g : Grid) (c k : Nat) (hk : k < n) :
     intro acc hsz
     cases hgp : g.get p with
     | none =>
-      simp only [List.foldl_cons, hgp]
+      simp only [List.foldl_cons, markUsed, hgp]
       rw [ih acc hsz]
       constructor
       · rintro (hh | ⟨q, hq, hqk⟩)
@@ -103,7 +101,7 @@ theorem usedByPeers_spec (g : Grid) (c k : Nat) (hk : k < n) :
           · exact Or.inr ⟨q, hq', hqk⟩
     | some d =>
       have hsz' : (acc.set! d true).size = n := by simpa using hsz
-      simp only [List.foldl_cons, hgp]
+      simp only [List.foldl_cons, markUsed, hgp]
       rw [ih (acc.set! d true) hsz']
       by_cases hdk : d = k
       · subst hdk
@@ -766,20 +764,18 @@ theorem reduce_completions {g : Grid} (hg : g.WF) (h : Grid) :
   unfold reduce
   exact reduceFuel_completions numCells g hg 0 h
 
-/-! ## Next step
+/-! ## What this file establishes, and what it does not
 
-`nakedSingle_forced` is the remaining link, and the blocker is a characterisation of
-`buildFlags` (`Reduce.lean`):
+`reduce_completions` is closed: both deductions are proved forced (`nakedSingle_forced`,
+`hiddenSingle_forced`), writing a forced digit preserves the completion set
+(`assign_preserves`), and the fuel-bounded loop preserves it at every step
+(`reduceFuel_completions`). No axiom beyond `propext`/`Classical.choice`/`Quot.sound`, no
+`sorry`.
 
-  `(buildFlags g).2[varIdx i j k] = true  ↔  g.get (cellIdx i j) ≠ none ∨ digit k is used by a
-  peer of (i,j)`.
-
-`buildFlags` is a nested `Id.run do` loop over all `n²` cells and `n` digits accumulating into
-two arrays, so this is the same shape of work as `usedByPeers_spec` but larger. With it,
-`peer_digit_excluded` and `exists_digit` close the argument immediately: a completion assigns
-the cell *some* legal digit, every digit a peer uses is excluded, and if exactly one survives
-the completion has no choice.
-
-Stated here rather than assumed: no axiom, no `sorry`. -/
+What is *not* here is the other half of §IV. Algorithm 1 decides which variables to delete;
+`Problem.ofReduced` then actually deletes them and rebuilds `Â`, `b̂`, `θ̂`. That the rebuilt
+objective agrees with the original — `Problem.penaltyDoubled P x = CNS.penaltyDoubled (P.embed x)`
+— is the remaining bridge, and it lives in `Problem.lean`, not here. It is currently checked
+executably (1000 random trials per instance, `cns reduced`) rather than proved. -/
 
 end CNS

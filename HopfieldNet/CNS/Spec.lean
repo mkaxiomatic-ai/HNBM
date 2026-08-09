@@ -43,6 +43,7 @@ executable one, and this module proves the obligations for the mathematical one.
 -/
 
 namespace CNS
+
 namespace Spec
 
 open scoped Classical

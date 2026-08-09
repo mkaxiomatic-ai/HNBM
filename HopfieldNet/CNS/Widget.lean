@@ -35,6 +35,9 @@ open scoped ProofWidgets.Jsx
 
 namespace CNS
 
+open QUBO
+open QUBO.Problem
+
 /-- Props of `sudokuPlayer.js`. Boards travel as 81-character strings, `'.'` for an empty
 cell, which is exactly `Grid.toString`. -/
 structure PlayerProps where

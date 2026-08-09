@@ -7,6 +7,9 @@ import HopfieldNet.CNS.Exact
 import HopfieldNet.CNS.Instances
 import HopfieldNet.CNS.Solver
 
+open QUBO
+open QUBO.Problem
+
 /-!
 # `lake exe cns` — reproduce the paper's results
 

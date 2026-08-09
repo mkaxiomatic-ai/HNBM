@@ -39,6 +39,7 @@ rebuild.
 
 namespace CNS
 
+
 /-! ## Arithmetic groundwork -/
 
 /-- `a * a` is never negative. -/

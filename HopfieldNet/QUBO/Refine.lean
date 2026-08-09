@@ -2,7 +2,7 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.NetValid
+import HopfieldNet.QUBO.Net
 
 /-!
 # The executable dynamics compute HNBM's local field
@@ -22,13 +22,13 @@ faster route.
 
 ## Why `netVec` is `O(nvars)` and not `O(nvars²)`
 
-Every surviving variable lies in exactly four constraint rows (`Problem.sum_Ahat`). Writing
-`ρ_r = Σ_{v ∈ r} x̂_v`,
+A surviving variable lies in `deg(u) = (rowsOf u).size` constraint rows (`Problem.sum_Ahat`),
+four of them for Sudoku. Writing `ρ_r = Σ_{v ∈ r} x̂_v`,
 
-  `Σ_{r ∋ u} ρ_r = Σ_v (ÂᵀÂ)_{uv} x̂_v = 4 x̂_u + Σ_{v ≠ u} (ÂᵀÂ)_{uv} x̂_v`,
+  `Σ_{r ∋ u} ρ_r = Σ_v (ÂᵀÂ)_{uv} x̂_v = deg(u)·x̂_u + Σ_{v ≠ u} (ÂᵀÂ)_{uv} x̂_v`,
 
-so `(W x̂)_u = 4 x̂_u − Σ_{r ∋ u} ρ_r`. The row sums are computed once per sweep by a scatter,
-and each neuron then costs four array reads. `rowSums_spec` below is what justifies that
+so `(W x̂)_u = deg(u)·x̂_u − Σ_{r ∋ u} ρ_r`. The row sums are computed once per sweep by a
+scatter, and each neuron then costs `deg(u)` array reads. `rowSums_spec` below is what justifies that
 rewriting.
 
 ## One genuine discrepancy
@@ -40,7 +40,7 @@ paper's dynamics and the repository's, and it is on the measure-zero set where a
 network is undetermined anyway.
 -/
 
-namespace CNS
+namespace QUBO
 namespace Problem
 
 open Finset
@@ -86,7 +86,7 @@ private theorem scatter_size :
   | cons r' t ih => intro ρ; rw [List.foldl_cons, ih]; simp
 
 /-- The outer loop of `rowSums`, as an accumulating statement about one row. -/
-private theorem rowSums_aux (P : Problem) (hV : P.Valid) (x : Array Bool) (r : Nat) :
+private theorem rowSums_aux (P : Problem) (hW : P.Wf) (x : Array Bool) (r : Nat) :
     ∀ (l : List Nat) (ρ : Array Int), (∀ u ∈ l, u < P.nvars) → r < ρ.size →
       (l.foldl (fun ρ u => if x.getD u false then
             (P.rowsOf.getD u #[]).foldl (fun ρ r' => ρ.set! r' ((ρ.getD r' 0) + 1)) ρ
@@ -100,8 +100,7 @@ private theorem rowSums_aux (P : Problem) (hV : P.Valid) (x : Array Bool) (r : N
     intro ρ hlt hr
     have hu : u < P.nvars := hlt u (List.mem_cons_self ..)
     have hnd : (P.rowsOf.getD u #[]).toList.Nodup := by
-      rw [hV.rowsOf_eq u hu]
-      exact (rowsOfVar_nodup _ (hV.varOf_lt u hu)).1
+      exact hW.nodup u hu
     rw [List.foldl_cons, List.countP_cons]
     by_cases hx : x.getD u false = true
     · have hstep : (if x.getD u false then
@@ -129,17 +128,17 @@ private theorem rowSums_aux (P : Problem) (hV : P.Valid) (x : Array Bool) (r : N
 
 `ρ_r = |{u : x̂_u = 1 and u occurs in row r}|`. This is the specification of the scatter that
 `Problem.rowSums` performs. -/
-theorem rowSums_spec (P : Problem) (hV : P.Valid) (x : Array Bool) {r : Nat} (hr : r < numRows) :
+theorem rowSums_spec (P : Problem) (hW : P.Wf) (x : Array Bool) {r : Nat} (hr : r < P.nrows) :
     (P.rowSums x).getD r 0
       = ((List.range P.nvars).countP
           fun u => x.getD u false && (P.rowsOf.getD u #[]).contains r : Int) := by
-  have hbase : (Array.replicate numRows (0 : Int)).getD r 0 = 0 := by
+  have hbase : (Array.replicate P.nrows (0 : Int)).getD r 0 = 0 := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hr)]
     simp
-  have hsz : r < (Array.replicate numRows (0 : Int)).size := by simpa using hr
+  have hsz : r < (Array.replicate P.nrows (0 : Int)).size := by simpa using hr
   show (Id.run _ : Array Int).getD r 0 = _
   rw [show (Id.run (do
-        let mut ρ : Array Int := Array.replicate numRows 0
+        let mut ρ : Array Int := Array.replicate P.nrows 0
         for u in [0:P.nvars] do
           ρ := if x.getD u false then
                  (P.rowsOf.getD u #[]).foldl (fun ρ r => ρ.set! r ((ρ.getD r 0) + 1)) ρ
@@ -147,10 +146,10 @@ theorem rowSums_spec (P : Problem) (hV : P.Valid) (x : Array Bool) {r : Nat} (hr
         return ρ) : Array Int)
       = (List.range P.nvars).foldl (fun ρ u => if x.getD u false then
             (P.rowsOf.getD u #[]).foldl (fun ρ r' => ρ.set! r' ((ρ.getD r' 0) + 1)) ρ
-          else ρ) (Array.replicate numRows 0) from by
+          else ρ) (Array.replicate P.nrows 0) from by
     simp [Id.run, List.range_eq_range']
     rfl]
-  rw [rowSums_aux P hV x r _ _ (fun u hu => List.mem_range.mp hu) hsz, hbase, zero_add]
+  rw [rowSums_aux P hW x r _ _ (fun u hu => List.mem_range.mp hu) hsz, hbase, zero_add]
 
 /-! ## The net input -/
 
@@ -160,7 +159,7 @@ Read off directly, since `netVec` is a `map`: the entry is `4x̂_u − Σ_{r ∋
 this equals `(W x̂)_u − θ̂_u` is `netVec_eq_localField`. -/
 theorem netVec_getD (P : Problem) (x : Array Bool) {u : Nat} (hu : u < P.nvars) :
     (P.netVec x).getD u 0
-      = ((if x.getD u false then (4 : Int) else 0)
+      = ((if x.getD u false then ((P.rowsOf.getD u #[]).size : Int) else 0)
           - (P.rowsOf.getD u #[]).foldl (fun acc r => acc + (P.rowSums x).getD r 0) 0)
         - P.theta.getD u 0 := by
   show ((Array.range P.nvars).map _).getD u 0 = _
@@ -175,7 +174,7 @@ theorem netVec_getD (P : Problem) (x : Array Bool) {u : Nat} (hu : u < P.nvars) 
 def bitsOf (P : Problem) (x : Array Bool) : Fin P.nvars → Bool := fun u => x.getD u.val false
 
 /-- **The executable row sums are the abstract ones.** -/
-theorem rowSumR_eq (P : Problem) (hV : P.Valid) (x : Array Bool) {r : Nat} (hr : r < numRows) :
+theorem rowSumR_eq (P : Problem) (hW : P.Wf) (x : Array Bool) {r : Nat} (hr : r < P.nrows) :
     rowSumR P (bitsOf P x) r = ((P.rowSums x).getD r 0 : ℝ) := by
   have hpt : ∀ u : Fin P.nvars, Ahat P r u * bit (bitsOf P x u)
       = (if (x.getD u.val false && (P.rowsOf.getD u.val #[]).contains r) then (1 : ℝ) else 0) := by
@@ -196,18 +195,19 @@ theorem rowSumR_eq (P : Problem) (hV : P.Valid) (x : Array Bool) {r : Nat} (hr :
       (fun i => if (x.getD i false && (P.rowsOf.getD i #[]).contains r) then (1 : ℝ) else 0),
     ← Finset.sum_filter, hfin, Finset.sum_const, nsmul_eq_mul, mul_one,
     List.toFinset_card_of_nodup (List.Nodup.filter _ List.nodup_range),
-    ← List.countP_eq_length_filter, rowSums_spec P hV x hr]
+    ← List.countP_eq_length_filter, rowSums_spec P hW x hr]
   norm_num
 
-/-- **`(W x̂)_u = 4 x̂_u − Σ_{r ∋ u} ρ_r`.**
+/-- **`(W x̂)_u = deg(u)·x̂_u − Σ_{r ∋ u} ρ_r`.**
 
 The identity that makes the net input `O(nvars)`: the Gram row against `x̂` is the sum of the
-row sums of the four rows containing `u`, and the diagonal contributes the degree. -/
-theorem mulVec_Wr (P : Problem) (hV : P.Valid) (x : Fin P.nvars → Bool) (u : Fin P.nvars) :
+row sums of the rows containing `u`, and the diagonal contributes that column's degree. -/
+theorem mulVec_Wr (P : Problem) (hW : P.Wf) (x : Fin P.nvars → Bool) (u : Fin P.nvars) :
     (Wr P).mulVec (fun v => bit (x v)) u
-      = 4 * bit (x u) - ∑ r ∈ Finset.range numRows, Ahat P r u * rowSumR P x r := by
+      = ((P.rowsOf.getD u.val #[]).size : ℝ) * bit (x u)
+        - ∑ r ∈ Finset.range P.nrows, Ahat P r u * rowSumR P x r := by
   have hswap : ∑ v, gramR P u v * bit (x v)
-      = ∑ r ∈ Finset.range numRows, Ahat P r u * rowSumR P x r := by
+      = ∑ r ∈ Finset.range P.nrows, Ahat P r u * rowSumR P x r := by
     unfold gramR rowSumR
     rw [Finset.sum_congr rfl fun v _ => Finset.sum_mul _ _ _, Finset.sum_comm]
     exact Finset.sum_congr rfl fun r _ => by
@@ -217,7 +217,7 @@ theorem mulVec_Wr (P : Problem) (hV : P.Valid) (x : Fin P.nvars → Bool) (u : F
     intro v; rw [Wr_split P u v]; split <;> ring
   rw [Matrix.mulVec_apply_eq_sum, Finset.sum_congr rfl fun v _ => hterm v,
     Finset.sum_add_distrib, Finset.sum_ite_eq Finset.univ u (fun v => gramR P u v * bit (x v))]
-  simp only [Finset.mem_univ, if_true, gramR_diag P hV u]
+  simp only [Finset.mem_univ, if_true, gramR_diag P hW u]
   rw [Finset.sum_neg_distrib, hswap]
   ring
 
@@ -253,7 +253,7 @@ Gibbs acceptance of the Boltzmann machine.
 This is what makes the search an instance of the repository's network rather than a lookalike:
 the integer routine in the inner loop and the `Finset.sum` in the specification agree on the
 nose, so a theorem proved for `ZeroOne` at `netParams P` is a theorem about the running code. -/
-theorem netVec_eq_localField (P : Problem) [Nonempty (Fin P.nvars)] (hV : P.Valid)
+theorem netVec_eq_localField (P : Problem) [Nonempty (Fin P.nvars)] (hW : P.Wf)
     (x : Array Bool) (u : Fin P.nvars) :
     ((P.netVec x).getD u.val 0 : ℝ)
       = (stateOfBits P (bitsOf P x)).net (netParams P) u
@@ -274,20 +274,19 @@ theorem netVec_eq_localField (P : Problem) [Nonempty (Fin P.nvars)] (hV : P.Vali
   -- the four-row fold against `ρ` is the indicator sum against `ρ`
   have hfold : ((((P.rowsOf.getD u.val #[]).foldl
         (fun acc r => acc + (P.rowSums x).getD r 0) (0 : Int)) : Int) : ℝ)
-      = ∑ r ∈ Finset.range numRows, Ahat P r u * rowSumR P (bitsOf P x) r := by
-    obtain ⟨hnd, hlt⟩ := rowsOfVar_nodup _ (hV.varOf_lt u.val u.isLt)
-    have hrw := hV.rowsOf_eq u.val u.isLt
+      = ∑ r ∈ Finset.range P.nrows, Ahat P r u * rowSumR P (bitsOf P x) r := by
     rw [cast_array_foldl_add,
-      ← sum_indicator_weighted (N := numRows) (P.rowsOf.getD u.val #[])
-        (fun r => ((P.rowSums x).getD r 0 : ℝ)) (by rw [hrw]; exact hnd)
-        (by rw [hrw]; exact hlt)]
+      ← sum_indicator_weighted (N := P.nrows) (P.rowsOf.getD u.val #[])
+        (fun r => ((P.rowSums x).getD r 0 : ℝ))
+        (hW.nodup u.val u.isLt) (hW.mem_lt u.val u.isLt)]
     refine Finset.sum_congr rfl fun r hr => ?_
-    rw [rowSumR_eq P hV x (Finset.mem_range.mp hr)]
+    rw [rowSumR_eq P hW x (Finset.mem_range.mp hr)]
     unfold Ahat inRow
     split <;> simp
-  have hbit : (if x.getD u.val false then (4 : ℝ) else 0) = 4 * bit (bitsOf P x u) := by
+  have hbit : (if x.getD u.val false then ((P.rowsOf.getD u.val #[]).size : ℝ) else 0)
+      = ((P.rowsOf.getD u.val #[]).size : ℝ) * bit (bitsOf P x u) := by
     unfold bit bitsOf; split <;> simp_all
-  rw [hnet, hθ, mulVec_Wr P hV _ u, netVec_getD P x u.isLt]
+  rw [hnet, hθ, mulVec_Wr P hW _ u, netVec_getD P x u.isLt]
   push_cast
   rw [hfold, hbit]
 
@@ -304,4 +303,4 @@ theorem gt_zero_eq_le_of_ne_zero {L : Int} (hL : L ≠ 0) :
     simp [h]; omega
 
 end Problem
-end CNS
+end QUBO

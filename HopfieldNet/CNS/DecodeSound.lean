@@ -5,6 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import HopfieldNet.CNS.GridSound
 import HopfieldNet.CNS.Embed
 
+open QUBO
+open QUBO.Problem
+
 /-!
 # A zero penalty decodes to a solved grid
 

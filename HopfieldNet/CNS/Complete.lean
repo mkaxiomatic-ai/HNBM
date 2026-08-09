@@ -24,6 +24,9 @@ and reading `isSolution` off the four families for an arbitrary grid.
 -/
 
 namespace CNS
+
+open QUBO
+open QUBO.Problem
 namespace Complete
 
 open CNS
@@ -81,7 +84,7 @@ theorem oR_varOf (u : Nat) : (Problem.ofReduced R).varOf.getD u 0 = (survList R)
   exact getD_toArray _ _ _
 
 
-theorem oR_base : (Problem.ofReduced R).base = R.grid := by simp only [Problem.ofReduced]
+theorem oR_base : (Problem.ofReduced R).base = R.grid.cells := by simp only [Problem.ofReduced]
 
 theorem mem_survList {v : Nat} :
     v ∈ survList R ↔ (v < numVars ∧ R.isFixed.getD v false = false) := by
@@ -198,7 +201,7 @@ def scatterStep (P : Problem) (x : Array Bool) (cells : Array (Option Nat)) (u :
 
 /-- `toGrid` written as a fold, which induction can handle. -/
 theorem toGrid_eq (P : Problem) (x : Array Bool) :
-    P.toGrid x = ⟨(List.range P.nvars).foldl (scatterStep P x) P.base.cells⟩ := by
+    P.toGrid x = ⟨(List.range P.nvars).foldl (scatterStep P x) P.base⟩ := by
   show (Id.run _ : Grid) = _
   unfold scatterStep
   simp only [Id.run, List.range_eq_range',
@@ -266,19 +269,19 @@ theorem scatter_hit (P : Problem) (x : Array Bool) (c : Nat) :
       split <;> simpa using hsz
 
 theorem toGrid_size (P : Problem) (x : Array Bool) :
-    (P.toGrid x).cells.size = P.base.cells.size := by
+    (P.toGrid x).cells.size = P.base.size := by
   rw [toGrid_eq]; exact scatter_size P x _ _
 
 theorem toGrid_get_miss (P : Problem) (x : Array Bool) {c : Nat}
     (hmiss : ∀ u < P.nvars, ¬ (x.getD u false = true ∧ (P.varOf.getD u 0) / n = c)) :
-    (P.toGrid x).get c = P.base.get c := by
+    (P.toGrid x).get c = (Grid.mk P.base).get c := by
   rw [toGrid_eq]
   exact scatter_miss P x c _ _ (fun u hu => hmiss u (List.mem_range.mp hu))
 
 theorem toGrid_get_hit (P : Problem) (x : Array Bool) {c u₀ : Nat} (hu₀ : u₀ < P.nvars)
     (hx0 : x.getD u₀ false = true) (hc0 : (P.varOf.getD u₀ 0) / n = c)
     (huniq : ∀ u < P.nvars, u ≠ u₀ → ¬ (x.getD u false = true ∧ (P.varOf.getD u 0) / n = c))
-    (hsz : c < P.base.cells.size) :
+    (hsz : c < P.base.size) :
     (P.toGrid x).get c = some ((P.varOf.getD u₀ 0) % n) := by
   rw [toGrid_eq]
   exact scatter_hit P x c _ _ u₀ List.nodup_range (List.mem_range.mpr hu₀) hx0 hc0
@@ -373,7 +376,7 @@ theorem toGrid_cell {g : Grid} (hg : g.WF) {x : Array Bool}
       (∀ kg, (reduce g).grid.get c = some kg → kg = k) := by
   obtain ⟨k, hk, hon, huq⟩ := cell_unique hz hc
   have hsz : (reduce g).grid.cells.size = numCells := reduce_wf hg
-  have hbasesz : c < (Problem.ofReduced (reduce g)).base.cells.size := by
+  have hbasesz : c < (Problem.ofReduced (reduce g)).base.size := by
     rw [oR_base, hsz]; exact hc
   have hiff : ∀ t, t < n → ((full g x).getD (c * n + t) false = true ↔ t = k) :=
     fun t ht => ⟨huq t ht, by rintro rfl; exact hon⟩

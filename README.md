@@ -77,10 +77,15 @@ Everything below is proved outright — no `sorry`, and `#print axioms` reports 
 
 **The network** — the search is not *modelled by* an HNBM network, it *is* one
 
+These are stated for an arbitrary 0/1 QUBO `‖Ax − b‖²`, not for Sudoku. The hypothesis is
+`Problem.Wf`, which mentions no incidence and no degree; `Problem.Refines sudokuInc` is the
+separate, Sudoku-specific half. See [genericity](#genericity) below.
+
 | Theorem | Statement |
 |---|---|
 | `Problem.netParams` | the **reduced** QUBO — the instance the solver actually runs on — is a `TwoState.ZeroOne ℝ (Fin nvars)`, with `pm` (symmetry, zero diagonal) discharged structurally |
 | `Problem.ofGrid_valid` | every instance the pipeline builds satisfies the structural invariants the above needs, so the bridge is unconditional rather than hypothetical |
+| `Problem.toy_zeroOneHamiltonian_eq` | the same bridge at an incidence with **two different column degrees** — the guard that keeps the genericity honest |
 | `Problem.zeroOneHamiltonian_eq` | HNBM's `{0,1}` Boltzmann Hamiltonian at those parameters **is** the paper's objective: `E(x̂) = ½‖Âx̂ − b̂‖² − ½‖b̂‖²` |
 | `Problem.netVec_eq_localField` | the `O(nvars)` integer routine in the inner loop computes exactly `s.net − θ̂`, HNBM's local field — the object that runs is the object proved about |
 | `Problem.rowSums_spec` | the row-sum scatter counts the set variables of each constraint row |
@@ -102,6 +107,25 @@ Everything below is proved outright — no `sorry`, and `#print axioms` reports 
 Together with `Ergodicity.RSrow_stationary_unique_eq_πBoltzVec` — the random-scan Gibbs chain has
 a unique stationary distribution and it is the Boltzmann measure of this energy — that is the
 sense in which the annealed Boltzmann machine concentrates on the solutions.
+
+### Genericity
+
+`Problem.Wf` — the hypothesis carried by everything in the two tables above — asks only that
+`A` be `0/1` (each column meets each row at most once), that the listed rows exist, and that
+`θ̂` be the folded threshold `2 θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r`. It says nothing about Sudoku,
+and nothing about the degree being constant: the `x² = x` diagonal fold cancels pointwise per
+column, so `W = −(AᵀA − diag(deg))` needs no regularity. The literal `4` that used to appear
+throughout is now the per-column `(rowsOf u).size`, and `θ̂` is stated *doubled* so that the
+`deg(u)/2` never has to be divided in `ℤ`.
+
+Sudoku enters only through `Problem.Refines sudokuInc`, and `Problem.Valid` is the conjunction.
+Exact cover, graph colouring and max-cut are therefore values of `CNS.Incidence`, not new
+developments.
+
+Claims like this are easy to make and hard to keep: with one 4-regular instance in the tree, a
+generalisation that secretly still assumes `deg = 4` typechecks, the solver keeps working, and
+the "generic QUBO" theorem is true of exactly one QUBO. `CNS.ToyQubo` is the guard — two
+variables of degrees `2` and `4`, with `zeroOneHamiltonian_eq` instantiated there.
 
 Nothing in the chain is left to run-time checking any more. `Complete.toGrid_completes` closes
 the last step: the certificate `CNS.accepts` verifies on every solve is provably redundant on a
@@ -159,6 +183,8 @@ W = −(AᵀA − 4I)      θ = −2·𝟙      p(x) = −½xᵀWx + θᵀx + 16
 ```
 
 with `A` of size `4n² × n³`, exactly four nonzeros per column and 28 neighbours per variable.
+That `4` is a fact about Sudoku's incidence, not an assumption of the algebra — see
+[genericity](#genericity).
 `W` is symmetric with zero diagonal, which is precisely what `TwoState.ZeroOne` requires.
 
 Two recovered hyperparameters decide whether the method works at all, and both are documented at

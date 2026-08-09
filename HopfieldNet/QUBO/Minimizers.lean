@@ -2,7 +2,7 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Refine
+import HopfieldNet.QUBO.Refine
 
 /-!
 # The energy minimisers are exactly the feasible assignments
@@ -30,7 +30,7 @@ for it exists. The results below apply to the memoryless single-site reading, wh
 `ModelConfig.sequential` selects.
 -/
 
-namespace CNS
+namespace QUBO
 namespace Problem
 
 open Finset
@@ -45,7 +45,7 @@ theorem penaltyR_nonneg (x : Fin P.nvars → Bool) : 0 ≤ penaltyR P x :=
 
 /-- The objective vanishes exactly when every constraint row is satisfied. -/
 theorem penaltyR_eq_zero_iff (x : Fin P.nvars → Bool) :
-    penaltyR P x = 0 ↔ ∀ r ∈ Finset.range numRows, rowSumR P x r = bhatR P r := by
+    penaltyR P x = 0 ↔ ∀ r ∈ Finset.range P.nrows, rowSumR P x r = bhatR P r := by
   unfold penaltyR
   rw [Finset.sum_eq_zero_iff_of_nonneg fun _ _ => sq_nonneg _]
   constructor
@@ -70,7 +70,7 @@ theorem rowSumR_eq_card (x : Fin P.nvars → Bool) (r : Nat) :
 Each residual is a difference of two integers, so the sum of squares is an integer — and a
 non-zero one is therefore at least `1`. -/
 theorem exists_int_penaltyR (x : Fin P.nvars → Bool) : ∃ m : ℤ, penaltyR P x = (m : ℝ) := by
-  refine ⟨∑ r ∈ Finset.range numRows,
+  refine ⟨∑ r ∈ Finset.range P.nrows,
     (((Finset.univ.filter fun u : Fin P.nvars => (x u && P.inRow u.val r) = true).card : ℤ)
       - P.bhat.getD r 0) ^ 2, ?_⟩
   unfold penaltyR bhatR
@@ -114,9 +114,9 @@ theorem stateOfBits_bitsOfState (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State)
 noncomputable def minEnergy : ℝ := -constR P / 2
 
 /-- **The energy is bounded below by `−‖b̂‖²/2`.** -/
-theorem minEnergy_le (hV : P.Valid) (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State) :
+theorem minEnergy_le (hW : P.Wf) (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State) :
     minEnergy P ≤ HopfieldEnergy.zeroOneHamiltonian (netParams P) s := by
-  rw [← stateOfBits_bitsOfState P s, zeroOneHamiltonian_eq P hV]
+  rw [← stateOfBits_bitsOfState P s, zeroOneHamiltonian_eq P hW]
   unfold minEnergy
   have := penaltyR_nonneg P (bitsOfState P s)
   linarith
@@ -127,10 +127,10 @@ The left-hand side is a statement about the repository's Boltzmann Hamiltonian; 
 side is `p(x̂) = 0`, which `CNS.Sound` identifies with satisfying the constraints (10a)–(10d).
 So minimising the HNBM energy *is* solving the puzzle — not a relaxation of it, and not a
 heuristic correlated with it. -/
-theorem energy_eq_min_iff (hV : P.Valid) (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State) :
+theorem energy_eq_min_iff (hW : P.Wf) (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State) :
     HopfieldEnergy.zeroOneHamiltonian (netParams P) s = minEnergy P
       ↔ penaltyR P (bitsOfState P s) = 0 := by
-  rw [← stateOfBits_bitsOfState P s, zeroOneHamiltonian_eq P hV]
+  rw [← stateOfBits_bitsOfState P s, zeroOneHamiltonian_eq P hW]
   unfold minEnergy
   simp only [stateOfBits_bitsOfState]
   constructor
@@ -142,14 +142,14 @@ theorem energy_eq_min_iff (hV : P.Valid) (s : (TwoState.ZeroOne ℝ (Fin P.nvars
 Any state that is not feasible sits at least `1/2` above the minimum. Because the gap is
 bounded away from zero and the state space is finite, the Boltzmann weight of every infeasible
 state decays like `exp(−1/(2T))` relative to a feasible one. -/
-theorem half_le_energy_sub_min (hV : P.Valid) (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State)
+theorem half_le_energy_sub_min (hW : P.Wf) (s : (TwoState.ZeroOne ℝ (Fin P.nvars)).State)
     (hs : HopfieldEnergy.zeroOneHamiltonian (netParams P) s ≠ minEnergy P) :
     minEnergy P + 1 / 2 ≤ HopfieldEnergy.zeroOneHamiltonian (netParams P) s := by
-  have hpen : penaltyR P (bitsOfState P s) ≠ 0 := fun h => hs ((energy_eq_min_iff P hV s).mpr h)
+  have hpen : penaltyR P (bitsOfState P s) ≠ 0 := fun h => hs ((energy_eq_min_iff P hW s).mpr h)
   have h1 := one_le_penaltyR_of_ne_zero P hpen
   have heq : HopfieldEnergy.zeroOneHamiltonian (netParams P) s
       = (penaltyR P (bitsOfState P s) - constR P) / 2 := by
-    rw [← stateOfBits_bitsOfState P s, zeroOneHamiltonian_eq P hV]
+    rw [← stateOfBits_bitsOfState P s, zeroOneHamiltonian_eq P hW]
     simp only [stateOfBits_bitsOfState]
   rw [heq]
   unfold minEnergy
@@ -161,7 +161,7 @@ Relative to a feasible state, an infeasible one is suppressed by at least `exp(�
 `HopfieldNet.Quiver.BM.Ergodicity`'s identification of the random-scan chain's unique stationary
 distribution as the Boltzmann measure of this energy, this is the sense in which the annealed
 Boltzmann machine of eq. (6) concentrates on the solutions of the puzzle. -/
-theorem boltzmann_ratio_le (hV : P.Valid) {T : ℝ} (hT : 0 < T)
+theorem boltzmann_ratio_le (hW : P.Wf) {T : ℝ} (hT : 0 < T)
     (s s' : (TwoState.ZeroOne ℝ (Fin P.nvars)).State)
     (hs : HopfieldEnergy.zeroOneHamiltonian (netParams P) s ≠ minEnergy P)
     (hs' : HopfieldEnergy.zeroOneHamiltonian (netParams P) s' = minEnergy P) :
@@ -171,7 +171,7 @@ theorem boltzmann_ratio_le (hV : P.Valid) {T : ℝ} (hT : 0 < T)
   rw [← Real.exp_add]
   apply Real.exp_le_exp.mpr
   rw [hs']
-  have hgap := half_le_energy_sub_min P hV s hs
+  have hgap := half_le_energy_sub_min P hW s hs
   rw [show -(1 / 2 : ℝ) / T + -(minEnergy P) / T = (-(1 / 2) + -(minEnergy P)) / T by ring,
     div_le_div_iff_of_pos_right hT]
   linarith
@@ -188,4 +188,4 @@ theorem tendsto_suppression :
   exact Real.tendsto_exp_atBot.comp hdiv
 
 end Problem
-end CNS
+end QUBO

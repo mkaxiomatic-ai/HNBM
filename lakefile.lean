@@ -12,6 +12,9 @@ package «HopfieldNet» where
 lean_lib «HopfieldNet» where
   -- add any library configuration options here
 
+lean_lib QUBO where
+  globs := #[.submodules `HopfieldNet.QUBO]
+
 lean_lib CNS where
   -- Collaborative neurodynamic Sudoku (Li & Wang, ICIST 2022).
   -- Deliberately Mathlib-free below `CNS.Spec`, so the data and execution layers

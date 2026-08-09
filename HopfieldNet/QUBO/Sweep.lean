@@ -2,7 +2,7 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Minimizers
+import HopfieldNet.QUBO.Minimizers
 
 /-!
 # The single-site sweep is HNBM's `Up`
@@ -32,7 +32,7 @@ fires on `> 0`. The two differ only when the field is exactly zero
 to *be* the library's update, not to be the paper's.
 -/
 
-namespace CNS
+namespace QUBO
 namespace Problem
 
 open Finset
@@ -69,7 +69,7 @@ private theorem stepAt_getD {x : Array Bool} {u : Nat} (hu : u < x.size) (v : Na
 variable [Nonempty (Fin P.nvars)]
 
 /-- **One executable step is one `NeuralNetwork.State.Up`.** -/
-theorem stateOfBits_stepAt (hV : P.Valid) {x : Array Bool} (hx : x.size = P.nvars)
+theorem stateOfBits_stepAt (hW : P.Wf) {x : Array Bool} (hx : x.size = P.nvars)
     (u : Fin P.nvars) :
     stateOfBits P (bitsOf P (P.stepAt x u.val))
       = (stateOfBits P (bitsOf P x)).Up (netParams P) u := by
@@ -88,7 +88,7 @@ theorem stateOfBits_stepAt (hV : P.Valid) {x : Array Bool} (hx : x.size = P.nvar
   · subst h
     rw [if_pos rfl, if_pos rfl]
     -- the threshold test and the sign of `netVec` are the same test
-    have hlf := netVec_eq_localField P hV x v
+    have hlf := netVec_eq_localField P hW x v
     unfold bit
     by_cases hle : ((netParams P).θ v).get TwoState.fin0
         ≤ (stateOfBits P (bitsOf P x)).net (netParams P) v
@@ -112,7 +112,7 @@ theorem stateOfBits_stepAt (hV : P.Valid) {x : Array Bool} (hx : x.size = P.nvar
 The executable sweep over a list of neurons and the library's fold of `Up` over the same list
 produce the same state. With `CNS.Minimizers`, that makes the objective the sweep descends the
 one whose minimisers are the solved grids. -/
-theorem stateOfBits_foldl (hV : P.Valid) :
+theorem stateOfBits_foldl (hW : P.Wf) :
     ∀ (us : List (Fin P.nvars)) {x : Array Bool}, x.size = P.nvars →
       stateOfBits P (bitsOf P (us.foldl (fun x u => P.stepAt x u.val) x))
         = us.foldl (fun s u => s.Up (netParams P) u) (stateOfBits P (bitsOf P x)) := by
@@ -121,16 +121,16 @@ theorem stateOfBits_foldl (hV : P.Valid) :
   | nil => intro x _; rfl
   | cons u t ih =>
     intro x hx
-    rw [List.foldl_cons, List.foldl_cons, ← stateOfBits_stepAt P hV hx u,
+    rw [List.foldl_cons, List.foldl_cons, ← stateOfBits_stepAt P hW hx u,
       ih (by rw [stepAt_size]; exact hx)]
 
 /-- The same statement as `workPhase`, the library's own name for the scan. -/
-theorem stateOfBits_workPhase (hV : P.Valid) (us : List (Fin P.nvars))
+theorem stateOfBits_workPhase (hW : P.Wf) (us : List (Fin P.nvars))
     {x : Array Bool} (hx : x.size = P.nvars)
     (h0 : (stateOfBits P (bitsOf P x)).onlyUi) :
     stateOfBits P (bitsOf P (us.foldl (fun x u => P.stepAt x u.val) x))
       = NeuralNetwork.State.workPhase (netParams P) (stateOfBits P (bitsOf P x)) h0 us :=
-  stateOfBits_foldl P hV us hx
+  stateOfBits_foldl P hW us hx
 
 end Problem
-end CNS
+end QUBO

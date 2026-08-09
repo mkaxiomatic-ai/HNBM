@@ -44,6 +44,9 @@ descending an objective whose minimisers are exactly the states the checker acce
 
 namespace CNS
 
+open QUBO
+open QUBO.Problem
+
 /-! ## Sudoku symmetries -/
 
 /-- A random permutation of `[0, m)` by Fisher–Yates. -/

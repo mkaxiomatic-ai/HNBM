@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import HopfieldNet.CNS.Sound
 import HopfieldNet.CNS.ReduceSound
 
+
 /-!
 # From the encoding to grids
 

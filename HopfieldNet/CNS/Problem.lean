@@ -3,6 +3,7 @@ Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import HopfieldNet.CNS.Encoding
+import HopfieldNet.QUBO.Problem
 
 /-!
 # The reduced QUBO instance
@@ -17,47 +18,39 @@ Splitting `x` into its free part `x̂` and its fixed part `s`,
 so the reduced objective is `p(x̂) = ½‖Â x̂ − b̂‖²`. This is precisely the paper's
 `p_a(x̂) = ½‖Â_a x̂ − b_a‖²` etc. with `b· = e_{n²} − A· s` (steps 39-42).
 
-Deleting *columns* leaves the row structure intact, so `diag(ÂᵀÂ)` is still `4` and the same
-diagonal-folding argument gives
+Deleting *columns* leaves the row structure intact, so a survivor keeps the degree it had, and
+the same diagonal-folding argument gives
 
-  `W = −(ÂᵀÂ − 4I)`,   `θ̂_u = 2 − Σ_{r ∋ u} b̂_r`,   `p(x̂) = −½x̂ᵀWx̂ + θ̂ᵀx̂ + ½‖b̂‖²`.
+  `W = −(ÂᵀÂ − D)`,   `θ̂_u = ½·deg(u) − Σ_{r ∋ u} b̂_r`,   `p(x̂) = −½x̂ᵀWx̂ + θ̂ᵀx̂ + ½‖b̂‖²`
+
+with `D = diag(deg)`. The fold cancels pointwise per column, so it needs no regularity: `CNS.Net`
+proves this for an arbitrary incidence and Sudoku's `deg ≡ 4` is never used. See `CNS.Incidence`.
 
 Note `θ̂` is no longer constant: reduction changes `b̂` row by row.
 
 ## Cost
 
-Every variable lies in exactly four rows, so the net input is computed in `O(nvars)` rather than
-`O(nvars²)`. Writing `ρ_r = Σ_{v ∈ r} x̂_v` for the row sums,
+Each variable lies in few rows — four, for Sudoku — so the net input is computed in `O(nvars)`
+rather than `O(nvars²)`. Writing `ρ_r = Σ_{v ∈ r} x̂_v` for the row sums,
 
-  `Σ_{r ∋ u} ρ_r = Σ_v (ÂᵀÂ)_{uv} x̂_v = 4 x̂_u + Σ_{v ≠ u} (ÂᵀÂ)_{uv} x̂_v`
+  `Σ_{r ∋ u} ρ_r = Σ_v (ÂᵀÂ)_{uv} x̂_v = deg(u)·x̂_u + Σ_{v ≠ u} (ÂᵀÂ)_{uv} x̂_v`
 
-hence `(W x̂)_u = 4 x̂_u − Σ_{r ∋ u} ρ_r`. That is the identity `netVec` implements, and it is
+hence `(W x̂)_u = deg(u)·x̂_u − Σ_{r ∋ u} ρ_r`. That is the identity `netVec` implements, and it is
 what makes the search tractable in Lean.
 -/
 
 namespace CNS
 
-/-- A reduced QUBO instance, ready for the neurodynamics of (3) and (6). -/
-structure Problem where
-  /-- Number of surviving variables — the Table I quantity. -/
-  nvars : Nat
-  /-- Reduced index → original `x_{ijk}` index. -/
-  varOf : Array Nat
-  /-- Reduced index → the (at most four) penalty rows containing it. -/
-  rowsOf : Array (Array Nat)
-  /-- Penalty row → the surviving variables occurring in it. -/
-  varsOf : Array (Array Nat)
-  /-- `b̂ = e − A_F s`, one entry per penalty row. -/
-  bhat : Array Int
-  /-- `θ̂_u = 2 − Σ_{r ∋ u} b̂_r`. -/
-  theta : Array Int
-  /-- `‖b̂‖²`, i.e. twice the additive constant `½‖b̂‖²`. -/
-  constDoubled : Int
-  /-- The assignment Algorithm 1 already determined. -/
-  base : Grid
-  deriving Inhabited
+open QUBO
+open QUBO.Problem
 
+end CNS
+
+namespace QUBO
 namespace Problem
+
+open CNS
+
 
 /-- Which original variables Algorithm 1 pinned to `1`; the paper's `s` restricted to its
 support. -/
@@ -112,50 +105,21 @@ once per sweep. Together they make `Problem.Valid` provable pointwise: a field p
 rewrite `buildFlags` received for `CNS.ReduceSound`. -/
 def ofReduced (R : Reduced) : Problem where
   nvars := (survivors R).size
+  nrows := numRows
   varOf := survivors R
   rowsOf := rowsOfSurv R
   varsOf := varsOfSurv R
   bhat := bhatOf R
   theta := thetaOf R
   constDoubled := (bhatOf R).foldl (fun acc bi => acc + bi * bi) 0
-  base := R.grid
+  base := R.grid.cells
 
 /-- Run Algorithm 1 and build the reduced instance. -/
 def ofGrid (g : Grid) : Problem := ofReduced (reduce g)
 
-/-- Row sums `ρ_r = Σ_{v ∈ r} x̂_v`.
-
-The `if` sits inside the assignment and the inner loop is a written-out `Array.foldl`. Both are
-cosmetic at run time — the compiled code is the same scatter — but they matter for proofs: the
-`@[simp]` lemma `List.forIn_pure_yield_eq_foldl` only matches a loop body of the shape
-`fun u ρ => pure (.yield _)`, and an `if` wrapped around the `pure` blocks it. With this shape
-`simp [Id.run]` turns the loop into a `List.foldl` that ordinary list induction can handle. -/
-@[inline] def rowSums (P : Problem) (x : Array Bool) : Array Int := Id.run do
-  let mut ρ : Array Int := Array.replicate numRows 0
-  for u in [0:P.nvars] do
-    ρ := if x.getD u false then
-           (P.rowsOf.getD u #[]).foldl (fun ρ r => ρ.set! r ((ρ.getD r 0) + 1)) ρ
-         else ρ
-  return ρ
-
-/-- `‖Â x̂ − b̂‖²`, i.e. twice the paper's `p(x̂)`. Zero exactly when `x̂` solves the puzzle. -/
-def penaltyDoubled (P : Problem) (x : Array Bool) : Int :=
-  let ρ := P.rowSums x
-  (Array.range numRows).foldl
-    (fun acc r => let d := (ρ.getD r 0) - (P.bhat.getD r 0); acc + d * d) 0
-
-/-- The net input `W x̂ − θ̂` driving (1), (3) and (6).
-
-Uses `(W x̂)_u = 4 x̂_u − Σ_{r ∋ u} ρ_r`, so the whole vector costs `O(nvars)`. -/
-def netVec (P : Problem) (x : Array Bool) : Array Int :=
-  let ρ := P.rowSums x
-  (Array.range P.nvars).map fun u =>
-    let s := (P.rowsOf.getD u #[]).foldl (fun acc r => acc + ρ.getD r 0) 0
-    ((if x.getD u false then (4 : Int) else 0) - s) - P.theta.getD u 0
-
 /-- Write a reduced assignment back into a full grid, on top of the Algorithm 1 base. -/
 def toGrid (P : Problem) (x : Array Bool) : Grid := Id.run do
-  let mut cells := P.base.cells
+  let mut cells := P.base
   for u in [0:P.nvars] do
     if x.getD u false then
       let v := P.varOf.getD u 0
@@ -173,13 +137,7 @@ def openCellGroups (P : Problem) : Array (Array Nat) := Id.run do
     byCell := byCell.set! c ((byCell.getD c #[]).push u)
   return byCell.filter (fun grp => grp.size != 0)
 
-/-- The reduced index of an original variable, when it survived the reduction.
 
-A linear scan, which is fine: `embed` runs in the consistency checks, never in a sweep. Written
-as a lookup rather than as a scatter with `set!` for the usual reason — `Array.getElem_map` and
-`List.find?` are characterised pointwise, a scatter only by induction on its trip count. -/
-def redIndex (P : Problem) (v : Nat) : Option Nat :=
-  (List.range P.nvars).find? fun u => P.varOf.getD u 0 == v
 
 /-- Embed a reduced assignment back into the full `n³` vector, filling the eliminated
 coordinates with the values Algorithm 1 pinned them to.
@@ -197,12 +155,5 @@ def embed (P : Problem) (fixedVal : Array Bool) (x : Array Bool) : Array Bool :=
     | some u => x.getD u false
     | none   => fixedVal.getD v false
 
-
-/-- Number of off-diagonal neighbours of a surviving variable (≤ 28). -/
-def degree (P : Problem) (u : Nat) : Nat :=
-  ((P.rowsOf.getD u #[]).foldl (fun acc r =>
-    (P.varsOf.getD r #[]).foldl (fun a w =>
-      if w == u || a.contains w then a else a.push w) acc) #[]).size
-
 end Problem
-end CNS
+end QUBO

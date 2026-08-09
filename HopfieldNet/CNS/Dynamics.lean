@@ -50,6 +50,9 @@ uniform draw.
 
 namespace CNS
 
+open QUBO
+open QUBO.Problem
+
 /-! ## Fixed-point logistic
 
 Measured on this toolchain (`cns bench`, 10M iterations): `Int` addition costs 1.7 ns and an
@@ -298,7 +301,7 @@ def seqRun (P : Problem) (cfg : ModelConfig) (stoch : Bool) (lvl0 : Nat) (g : Rn
       for r in rows do
         sum := sum + rho.getD r 0
       let xi := x.getD i false
-      let wx := (if xi then (4 : Int) else 0) - sum
+      let wx := (if xi then (rows.size : Int) else 0) - sum
       let ui := (u.getD i 0) + (wx - P.theta.getD i 0)
       u := u.set! i ui
       let mut nb : Bool := ui > 0

@@ -2,7 +2,8 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Refine
+import HopfieldNet.QUBO.Refine
+import HopfieldNet.CNS.NetValid
 import HopfieldNet.CNS.Sound
 
 /-!
@@ -34,6 +35,9 @@ which family it belongs to, and within a family the coordinates match by `omega`
 -/
 
 namespace CNS
+
+open QUBO
+open QUBO.Problem
 
 open Finset
 
@@ -462,7 +466,7 @@ theorem rowCount_embed (R : Reduced) (x : Array Bool) {r : Nat} (hr : r < numRow
   -- the free part is the reduced row sum
   have hfree : ((List.range numVars).countP fun v => !(R.isFixed.getD v false) && p v : Int)
       = (P.rowSums x).getD r 0 := by
-    rw [rowSums_spec P hV x hr]
+    rw [rowSums_spec P hV.toWf x (by rw [hP, (ofReduced_refines R).nrows_eq]; exact hr)]
     congr 1
     have hlen : ((survivors R).toList).length = P.nvars := by
       rw [Array.length_toList]; simp only [hP, ofReduced]
@@ -479,7 +483,7 @@ theorem rowCount_embed (R : Reduced) (x : Array Bool) {r : Nat} (hr : r < numRow
     have hvar : ((survivors R).toList).getD u 0 = P.varOf.getD u 0 := by
       rw [Array.getD_toList]; simp only [hP, ofReduced]
     rw [hvar, hp]
-    simp only [redIndex_varOf hV hu', hV.rowsOf_eq u hu']
+    simp only [redIndex_varOf hV hu', hV.rowsOf_eq u hu', sudokuInc_rowsOf]
   -- split the full count on whether the variable survived
   have hsplit := countP_split
     (fun v => y.getD v false && (rowsOfVar v).contains r)

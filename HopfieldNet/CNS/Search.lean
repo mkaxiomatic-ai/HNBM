@@ -56,6 +56,9 @@ the personal best. That reading is used here.
 
 namespace CNS
 
+open QUBO
+open QUBO.Problem
+
 /-- Hyperparameters of Algorithm 2. -/
 structure SearchConfig where
   /-- Population size `N`. -/

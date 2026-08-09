@@ -2,7 +2,8 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Net
+import HopfieldNet.QUBO.Net
+import HopfieldNet.CNS.SudokuInc
 
 /-!
 # The pipeline's reduced instances are valid
@@ -19,65 +20,14 @@ be characterised by an induction over its trip count carrying the whole array as
 
 namespace CNS
 
+open QUBO
+open QUBO.Problem
+
 open Finset
 
 -- `numVars = 729` and `numRows = 324` are `def`s, so unification occasionally tries to evaluate
 -- `Array.range` at them. Raise the limit rather than making the arithmetic opaque.
 set_option maxRecDepth 8000
-
-/-! ## Array folds as sums -/
-
-/-- Folding an addition over a list is summing the mapped entries. -/
-private theorem list_foldl_add {M : Type*} [AddCommMonoid M] {α : Type*} (f : α → M) :
-    ∀ (l : List α) (acc : M), l.foldl (fun a x => a + f x) acc = acc + (l.map f).sum := by
-  intro l
-  induction l with
-  | nil => intro acc; simp
-  | cons x t ih => intro acc; simp only [List.foldl_cons, List.map_cons, List.sum_cons, ih]
-                   rw [add_assoc]
-
-/-- The sum of a mapped list, indexed by position. -/
-private theorem list_map_sum_eq_sum_range {M : Type*} [AddCommMonoid M] {α : Type*}
-    (f : α → M) (d : α) :
-    ∀ l : List α, (l.map f).sum = ∑ i ∈ Finset.range l.length, f (l.getD i d) := by
-  intro l
-  induction l with
-  | nil => simp
-  | cons x t ih =>
-    simp only [List.map_cons, List.sum_cons, List.length_cons, Finset.sum_range_succ']
-    rw [ih]
-    simp [List.getD_cons_succ, List.getD_cons_zero, add_comm]
-
-/-- **An array fold of additions is a `Finset` sum over its indices.**
-
-The workhorse for turning `ofReduced`'s folds into the sums `Problem.Valid` is stated with. -/
-theorem Array.foldl_add_eq_sum {M : Type*} [AddCommMonoid M] {α : Type*}
-    (a : Array α) (f : α → M) (d : α) :
-    a.foldl (fun acc x => acc + f x) 0 = ∑ i ∈ Finset.range a.size, f (a.getD i d) := by
-  rw [← Array.foldl_toList, list_foldl_add f a.toList 0, zero_add,
-    list_map_sum_eq_sum_range f d a.toList, Array.length_toList]
-  refine Finset.sum_congr rfl fun i hi => ?_
-  have hi' : i < a.size := Finset.mem_range.mp hi
-  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi',
-    List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by simpa using hi')]
-  simp
-
-/-- Folding over a duplicate-free array of row indices is summing its indicator over all rows. -/
-theorem sum_indicator_weighted {M : Type*} [AddCommMonoid M] {N : Nat} (a : Array Nat)
-    (f : Nat → M) (hnd : a.toList.Nodup) (hlt : ∀ r ∈ a, r < N) :
-    ∑ r ∈ Finset.range N, (if a.contains r then f r else 0)
-      = a.foldl (fun acc r => acc + f r) 0 := by
-  have hfilter : (Finset.range N).filter (fun r => a.contains r = true) = a.toList.toFinset := by
-    ext r
-    simp only [Finset.mem_filter, Finset.mem_range, List.mem_toFinset, Array.contains_iff_mem,
-      Array.mem_toList_iff]
-    exact ⟨fun h => h.2, fun h => ⟨hlt r h, h⟩⟩
-  rw [← Finset.sum_filter, hfilter, List.sum_toFinset _ hnd, ← Array.foldl_toList,
-    list_foldl_add f a.toList 0, zero_add]
-
-/-! ## Reading off `ofReduced`
-
-Each field is a `map` or a `filter`; these lemmas are the pointwise readings. -/
 
 namespace Problem
 
@@ -93,6 +43,10 @@ private theorem ofReduced_varOf : (ofReduced R).varOf = survivors R := by
 
 /-- The dimension is the number of survivors. -/
 private theorem ofReduced_nvars : (ofReduced R).nvars = (survivors R).size := by
+  simp only [ofReduced]
+
+/-- The row count is the Sudoku one. -/
+private theorem ofReduced_nrows : (ofReduced R).nrows = numRows := by
   simp only [ofReduced]
 
 /-- `rowsOf` is `varOf` mapped through `rowsOfVar`. -/
@@ -164,17 +118,19 @@ private theorem varOf_inj' {u : Nat} (hu : u < (ofReduced R).nvars) {v : Nat}
   exact (List.getElem_inj (h₀ := hlu) (h₁ := hlv) (h := hnd)).mp
     (by rw [Array.getElem_toList, Array.getElem_toList]; exact h)
 
-/-- **Every problem the pipeline builds satisfies `Valid`.**
-
-With this, `Net.zeroOneHamiltonian_eq` applies to the instances the search is actually run on:
-the HNBM energy of `netParams (Problem.ofGrid g)` is the paper's `p(x̂)` for the reduced puzzle
-of `g`. -/
-theorem ofReduced_valid : (ofReduced R).Valid where
+/-- The pipeline's problems are column-restrictions of the Sudoku incidence. -/
+theorem ofReduced_refines : Problem.Refines sudokuInc (ofReduced R) where
+  nrows_eq := by simp only [ofReduced]; rfl
   varOf_lt := fun u hu => varOf_lt' R hu
-  varOf_inj := fun u hu v hv h => varOf_inj' R hu hv h
   rowsOf_eq := fun u hu => by
     rw [ofReduced_rowsOf]
     exact getD_map _ _ 0 hu #[]
+  varOf_inj := fun u hu v hv h => varOf_inj' R hu hv h
+
+/-- The pipeline's problems are well-formed 0/1 QUBOs. -/
+theorem ofReduced_wf : (ofReduced R).Wf where
+  nodup := (ofReduced_refines R).nodup'
+  mem_lt := (ofReduced_refines R).mem_lt'
   theta_eq := fun u hu => by
     have hu' : u < (survivors R).size := by rw [← ofReduced_nvars]; exact hu
     have hRO : (ofReduced R).rowsOf = rowsOfSurv R := by rw [ofReduced_rowsOf]; unfold rowsOfSurv; rfl
@@ -184,13 +140,24 @@ theorem ofReduced_valid : (ofReduced R).Valid where
     have hvlt : (survivors R).getD u 0 < numVars := by
       have := varOf_lt' R hu; rwa [ofReduced_varOf] at this
     obtain ⟨hnd, hlt⟩ := rowsOfVar_nodup _ hvlt
-    rw [ofReduced_theta, getD_map _ _ #[] hsz 0, ofReduced_bhat, hRO, hrs]
+    rw [ofReduced_theta, getD_map _ _ #[] hsz 0, ofReduced_bhat, hRO, hrs,
+      Problem.rowsOfVar_size]
     unfold thetaRow
-    rw [← sum_indicator_weighted (N := numRows) _ _ hnd hlt]
+    rw [← sum_indicator_weighted (N := numRows) _ _ hnd hlt, ofReduced_nrows]
+    push_cast
+    ring
   const_eq := by
     rw [ofReduced_const, Array.foldl_add_eq_sum (bhatOf R) (fun b => b * b) 0,
       ← ofReduced_bhat, ofReduced_bhat_size]
     exact Finset.sum_congr rfl fun r _ => by rw [ofReduced_bhat]; exact (sq _).symm
+
+/-- **Every problem the pipeline builds satisfies `Valid`.**
+
+With this, `Net.zeroOneHamiltonian_eq` applies to the instances the search is actually run on:
+the HNBM energy of `netParams (Problem.ofGrid g)` is the paper's `p(x̂)` for the reduced puzzle
+of `g`. -/
+theorem ofReduced_valid : (ofReduced R).Valid :=
+  { toWf := ofReduced_wf R, toRefines := ofReduced_refines R }
 
 /-- The reduced instance of a puzzle is valid. -/
 theorem ofGrid_valid (g : Grid) : (ofGrid g).Valid := ofReduced_valid _

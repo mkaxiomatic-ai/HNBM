@@ -34,6 +34,7 @@ Mathlib-free, like everything under `CNS` except `CNS.Spec`.
 
 namespace CNS
 
+
 /-! ## Completions -/
 
 /-- A grid has the right number of cells. Not enforced by the type; see the module note. -/

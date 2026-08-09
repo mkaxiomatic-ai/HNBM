@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Matteo Cipollina
 -/
 import PF.PerronFrobenius.Lemmas
-import PF.aux
+import PF.Auxiliary
 import Mathlib.Data.Matrix.Basic
 import PF.Topology.Compactness.ExtremeValueUSC
 
@@ -82,7 +82,7 @@ theorem upperSemicontinuousOn [Nonempty n] (A : Matrix n n ℝ) :
   have f_cont : ContinuousOn f U := by
     refine continuousOn_finset_inf' (Hsup_nonempt x₀ hx₀) (fun i hi ↦ ?_)
     refine (ContinuousOn.div ?_ (continuous_apply i).continuousOn fun y hy ↦ ne_of_gt (hy i hi))
-    · simpa using
+    · simpa [Function.comp_def, Matrix.mulVecLin_apply] using
         ((continuous_apply i).comp (mulVec_continuousLinearMap A).continuous).continuousOn
   have f_ge : ∀ y ∈ U ∩ stdSimplex ℝ n, collatzWielandtFn A y ≤ f y := by
     intro y hy
@@ -203,7 +203,7 @@ lemma bddAbove [DecidableEq n] [Nonempty n] (A : Matrix n n ℝ) (hA_nonneg : �
     rw [← h_max_eq]
     exact lt_of_lt_of_le hi_pos (le_sup' x (mem_univ i))
   have h_ratio_le : (A *ᵥ x) m / x m ≤ univ.sup' univ_nonempty (fun k ↦ ∑ l, A k l) := by
-    rw [mulVec_apply, div_le_iff h_xm_pos]
+    rw [mulVec_apply_eq_sum, div_le_iff h_xm_pos]
     calc _ ≤ ∑ j, A m j * x m := ?_
          _ = (∑ j, A m j) * x m := ?_
          _ ≤ (univ.sup' univ_nonempty (fun k ↦ ∑ l, A k l)) * x m := ?_
@@ -318,7 +318,7 @@ lemma bddAbove_image_P_set [DecidableEq n] [Nonempty n] (A : Matrix n n ℝ)
   have h_le_ratio : collatzWielandtFn A x ≤ (A *ᵥ x) m / x m :=
     CollatzWielandt.le_any_ratio A hx_nonneg hx_ne_zero m h_xm_pos
   have h_ratio_le : (A *ᵥ x) m / x m ≤ univ.sup' univ_nonempty (fun k ↦ ∑ l, A k l) := by
-    rw [mulVec_apply, div_le_iff h_xm_pos]
+    rw [mulVec_apply_eq_sum, div_le_iff h_xm_pos]
     calc ∑ j, A m j * x j ≤ ∑ j, A m j * x m := ?_
          _ = (∑ j, A m j) * x m := by rw [sum_mul]
          _ ≤ (univ.sup' univ_nonempty (fun k ↦ ∑ l, A k l)) * x m := ?_
@@ -412,7 +412,7 @@ similarity-transformed matrix `B = D⁻¹AD` (where `D` is `diagonal v`) has row
 lemma row_sum_of_similarity_transformed_matrix [DecidableEq n] [Nonempty n] {A : Matrix n n ℝ}
     {r : ℝ} {v : n → ℝ} (hv_pos : ∀ i, 0 < v i) (h_eig : A *ᵥ v = r • v) :
   ∀ i, ∑ j, (diagonal (v⁻¹) * A * diagonal v) i j = r := fun i ↦ by
-  simpa [mulVec_apply, mul_one] using (congrArg (fun f => f i)
+  simpa [mulVec_apply_eq_sum, mul_one] using (congrArg (fun f => f i)
     (ones_eigenvector_of_similarity_transform (A := A) hv_pos h_eig))
 
 /--
@@ -427,7 +427,7 @@ lemma le_of_max_le_row_sum [Nonempty n] [DecidableEq n] {B : Matrix n n ℝ} {x 
   have hcx : c * x m ≤ (B *ᵥ x) m := by
     simpa [Pi.smul_apply, smul_eq_mul] using (h_le_Bx m)
   have hBx : (B *ᵥ x) m ≤ r * x m := by
-    calc (B *ᵥ x) m = ∑ j, B m j * x j := by simp [mulVec_apply]
+    calc (B *ᵥ x) m = ∑ j, B m j * x j := by simp [mulVec_apply_eq_sum]
      _ ≤ ∑ j, B m j * x m := ?_
      _ = (∑ j, B m j) * x m := ?_
      _ = r * x m := ?_
@@ -482,7 +482,7 @@ theorem le_eigenvalue_of_right_eigenvector [Nonempty n]  [DecidableEq n] (hA_non
     intro i
     have h_mulVec_mono :
       (D_inv *ᵥ ((collatzWielandtFn A w) • w)) i ≤ (D_inv *ᵥ (A *ᵥ w)) i := by
-      simpa [mulVec_apply] using (sum_le_sum fun j _ =>
+      simpa [mulVec_apply_eq_sum] using (sum_le_sum fun j _ =>
         mul_le_mul_of_nonneg_left (h_le_mulVec j) (h_Dinv_nonneg i j))
     calc _ ≤ (D_inv *ᵥ (A *ᵥ w)) i := h_mulVec_mono
          _ = (D_inv *ᵥ (A *ᵥ (D *ᵥ x))) i := by rw [h_w_eq_Dx]

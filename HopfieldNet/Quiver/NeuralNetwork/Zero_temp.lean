@@ -227,11 +227,11 @@ lemma tendsto_logistic_const_mul_coeNNReal
     exact this
   by_cases hcpos : 0 < c
   · have hmul := tendsto_mul_const_atTop_atTop_of_pos (c:=c) hcpos
-    simpa [hcpos, Function.comp] using
+    simpa [hcpos, Function.comp_def] using
       logisticProb_tendsto_atTop.comp (hmul.comp h_coe)
   · by_cases hcneg : c < 0
     · have hmul := tendsto_mul_const_atTop_atBot_of_neg (c:=c) hcneg
-      simpa [hcpos, hcneg, Function.comp] using
+      simpa [hcpos, hcneg, Function.comp_def] using
         logisticProb_tendsto_atBot.comp (hmul.comp h_coe)
     · have hc0 : c = 0 := le_antisymm (le_of_not_gt hcpos) (le_of_not_gt hcneg)
       have hconst :
@@ -258,10 +258,11 @@ lemma tendsto_probPos_at_zero
     filter_upwards [self_mem_nhdsWithin] with T hTpos
     have hT0 : 0 ≤ T := le_of_lt hTpos
     have : (β ⟨Real.toNNReal T⟩ : ℝ) = 1 / (kB * T) := by
-      simpa [Temperature.ofNNReal] using Temperature.beta_fun_T_formula T hTpos
+      simpa [Temperature.ofNNReal, Temperature.betaFromReal] using
+        Temperature.beta_fun_T_formula T hTpos
     unfold probPos
     simp [this, logisticProb, mul_comm, mul_assoc, div_eq_mul_inv]
-    simp_all only [Set.mem_Ioi, one_div, mul_inv_rev, map_sub, true_or, L]
+    simp_all only [Set.mem_Ioi, one_div, _root_.mul_inv_rev, map_sub, true_or, L]
   have hlim :
       Tendsto (fun T : ℝ =>
         logisticProb (((scale (NN := NN) (f:=f)) / kB) * (f L) / T))
@@ -290,9 +291,8 @@ lemma gibbsUpdate_apply_updPos
   have hcoe : (q : ℝ≥0∞) = ENNReal.ofReal pPos := by
     simp [q]
     exact (ENNReal.ofReal_eq_coe_nnreal hPos_nonneg).symm
-  simp [q, hcoe, PMF.bernoulli_bind_pure_apply_left_of_ne (α:=NN.State) hq_le hne,
-        pPos]
-  grind
+  simp [q, hcoe, hne, PMF.bernoulli_apply,
+        PMF.bernoulli_bind_pure_apply_left_of_ne (α:=NN.State) hq_le hne, pPos]
 
 /-- Pointwise evaluation at `updNeg`: exact equality with `1 - probPos`. -/
 lemma gibbsUpdate_apply_updNeg
@@ -319,8 +319,7 @@ lemma gibbsUpdate_apply_updNeg
       simp [q]
       exact (ENNReal.ofReal_eq_coe_nnreal hPos_nonneg).symm
     simpa [this] using (ENNReal.ofReal_sub 1 hPos_nonneg)
-  simp [pPos, q, hEval, hsub]
-  grind
+  simp [pPos, q, hEval, hsub, hne, hne.symm, PMF.bernoulli_apply]
 
 /-- Eventual equality rewriting Gibbs mass at updPos along β → ∞ to ENNReal.ofReal (probPos at T). -/
 lemma eventually_eval_updPos_eq_ofReal_probPos

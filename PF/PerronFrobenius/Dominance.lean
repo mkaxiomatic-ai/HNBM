@@ -55,14 +55,14 @@ lemma abs_eigenvector_inequality (hA_nonneg : ∀ i j, 0 ≤ A i j)
   · simp
   · simp [Pi.smul_apply, smul_eq_mul]
   · simp [h_eig, Pi.smul_apply, smul_eq_mul]
-  · simp [mulVec_apply]
+  · simp [mulVec_apply_eq_sum]
   · simpa using
     (Finset.abs_sum_le_sum_abs (s := Finset.univ) (f := fun j => A i j * v j))
   ·classical
    refine Finset.sum_congr rfl ?_
    intro j _
    simp [abs_mul, abs_of_nonneg (hA_nonneg i j)]
-  · simp [w, mulVec_apply]
+  · simp [w, mulVec_apply_eq_sum]
 
 /--
 If the triangle equality holds for the complex eigenvector equation `A * x = lam * x`,
@@ -82,7 +82,7 @@ lemma norm_eigenvector_is_eigenvector_of_triangle_eq (hA_nonneg : ∀ i j, 0 ≤
        _   = ‖lam * x i‖ := ?_
        _   = ‖lam‖ * ‖x i‖ := ?_
        _   = ((‖lam‖ : ℝ) • fun i => ‖x i‖) i := ?_
-  · simp [mulVec_apply]
+  · simp [mulVec_apply_eq_sum]
   · simp_rw [Complex.norm_ofReal, abs_of_nonneg (hA_nonneg _ _)]
   · simp_rw [norm_mul]
   · exact (h_triangle_eq i).symm
@@ -132,7 +132,7 @@ equal to `lambda`, then `lambda` is an eigenvalue with the all-ones vector as it
 lemma row_sum_eigenvalue (_ : ∀ i j, 0 ≤ A i j) (h_row_sums : ∀ i, ∑ j, A i j = lambda) :
   A *ᵥ (1 : n → ℝ) = lambda • (1 : n → ℝ) := by
   ext i
-  simp [mulVec_apply, h_row_sums i, smul_eq_mul]
+  simp [mulVec_apply_eq_sum, h_row_sums i, smul_eq_mul]
 
 /-- If the dot product of a non-negative vector `v` and a strictly positive vector `w` is zero,
     then `v` must be the zero vector. -/
@@ -197,7 +197,7 @@ lemma sum_component_norms_eq_perron_power_norm [DecidableEq n] -- [CommSemiring 
     _ = (perronRoot_alt A) ^ k * ‖x m‖ := ?_
   · simp_rw [norm_mul, Complex.norm_ofReal]
   · simp_rw [abs_of_pos (hAk_pos m _)]
-  · simp [mulVec_apply]
+  · simp [mulVec_apply_eq_sum]
   · simpa using congrArg (fun v => v m) h_pow_eig
   · simp [Pi.smul_apply, smul_eq_mul]
 
@@ -241,7 +241,7 @@ theorem eigenvalue_abs_subinvariant
     _ ≤ ∑ j, ‖(A i j : ℂ) * x j‖ := by apply norm_sum_le
     _ = ∑ j, A i j * ‖x j‖ := by
       simp only [Complex.norm_mul, norm_real, Real.norm_eq_abs, abs_of_nonneg (hA_nonneg _ _)]
-    _ = (A *ᵥ fun i => ‖x i‖) i := by simp [mulVec_apply]
+    _ = (A *ᵥ fun i => ‖x i‖) i := by simp [mulVec_apply_eq_sum]
 
 variable {n : Type*} [Fintype n] [Nonempty n] [DecidableEq n]
 variable {A : Matrix n n ℝ}
@@ -270,7 +270,7 @@ lemma eigenvalue_ne_zero_of_irreducible
     eigenvector_is_positive_of_irreducible hA_irred h_eig_zero_smul h_x_abs_nonneg h_x_abs_ne_zero
   obtain ⟨i, j, hAij_pos⟩ := Matrix.Irreducible.exists_pos_entry (A := A) hA_irred
   have h_sum : (A *ᵥ (fun k => ‖x k‖)) i = 0 := by rw [h_eig_zero]; rfl
-  rw [mulVec_apply] at h_sum
+  rw [mulVec_apply_eq_sum] at h_sum
   have h_sum_pos : 0 < ∑ k, A i k * ‖x k‖ := by
     apply sum_pos_of_mem
     · intro k _

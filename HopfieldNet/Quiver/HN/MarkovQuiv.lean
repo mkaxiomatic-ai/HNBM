@@ -122,9 +122,7 @@ noncomputable instance : Fintype ((HopfieldNetwork R U).State) := by
     cases s2 with | mk act2 hp2 =>
     simp at *
     ext u
-    have h_u := congr_fun h u
-    simp [f] at h_u
-    exact h_u
+    exact congrArg Subtype.val (congr_fun h u)
   have h_surj : Function.Surjective f := by
     intro g
     let act := fun u => (g u).val

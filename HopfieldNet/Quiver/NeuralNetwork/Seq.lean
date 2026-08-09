@@ -123,7 +123,7 @@ lemma pred_layer_lt (h : (SeqNet (R := R) ζ actMap arch).Hom u v) :
 /-- Input neurons are stable. -/
 lemma input_is_stable (s : SeqState (R := R) ζ actMap arch)
     (u : SeqNeuron arch) (hu : u.layerIdx.val = 0) : (s.Up params u).act u = s.act u := by
-  simp [State.Up, toNeuralNetwork, hu]
+  simp [State.Up, SeqNet, toNeuralNetwork, hu]
 
 /--
   A Sequential Network implies a specific order: Layer 1, then Layer 2, etc.
@@ -200,7 +200,7 @@ def exParams : SeqParams (R := ℚ) (ζ := CustomActivations)
       simpa [SeqNet, toNeuralNetwork, SeqAdj] using (hv)
     simp [h']
   hw' := trivial
-  h_arrows u v := by simp [toNeuralNetwork, SeqAdj]}
+  h_arrows _ _ _ := trivial}
 
 def exInputState : SeqState (R := ℚ) (ζ := CustomActivations)
     (actMap := Interpreter ℚ) exArch := {

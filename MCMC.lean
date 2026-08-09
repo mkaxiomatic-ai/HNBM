@@ -20,4 +20,4 @@ import PF.PerronFrobenius.Stochastic
 import PF.PerronFrobenius.Uniqueness
 import PF.LinearAlgebra.Matrix.Spectrum
 import PF.Topology.Compactness.ExtremeValueUSC
-import PF.aux
+import PF.Auxiliary

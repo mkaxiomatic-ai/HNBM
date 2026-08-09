@@ -49,6 +49,7 @@ theorem bddAbove_image_of_upperSemicontinuousOn (hK : IsCompact K)
     have hf_restrict : UpperSemicontinuous (K.restrict f) := (upperSemicontinuousOn_iff_upperSemicontinuous).mp hf
     rw [upperSemicontinuous_iff_isOpen_preimage] at hf_restrict
     convert hf_restrict n
+    rfl
   -- If `f` is unbounded on `K`, then the collection `{U n}` covers `K` (i.e., `univ` in `Set K`).
   have hU_covers_univ : (univ : Set K) ⊆ ⋃ n, U n := fun x _ ↦ by
     rcases exists_nat_gt (f x) with ⟨n, hn⟩

@@ -44,14 +44,21 @@ namespace CNS
 /-- Assign digit `k` to cell `c`. -/
 def Grid.assign (g : Grid) (c k : Nat) : Grid := ⟨g.cells.set! c (some k)⟩
 
+/-- One step of the `usedByPeers` fold: mark the digit peer `p` holds, if it holds one.
+
+Named rather than written inline because two syntactically identical `match` expressions
+elaborate to two *distinct* matcher constants, which do not unify; `usedByPeers_spec` has to
+state its induction over the same function this fold uses. -/
+def markUsed (g : Grid) (acc : Array Bool) (p : Nat) : Array Bool :=
+  match g.get p with
+  | some k => acc.set! k true
+  | none   => acc
+
 /-- Digits already placed in a peer of `c`; these are the `k` ruled out at `c` by steps 16-31. -/
 def usedByPeers (g : Grid) (c : Nat) : Array Bool :=
   -- folds over `List`, not `Array`: Lean core has no `Array.foldl = List.foldl ∘ toList`
   -- lemma, and `CNS.ReduceSound` needs to induct over this.
-  (peers c).toList.foldl (fun acc p =>
-    match g.get p with
-    | some k => acc.set! k true
-    | none   => acc) (Array.replicate n false)
+  (peers c).toList.foldl (markUsed g) (Array.replicate n false)
 
 /-- The flags of a single variable: `(s, δ)` for `x_{ijk}` where `v = varIdx i j k`.
 

@@ -92,7 +92,7 @@ lemma eigenvector_no_zero_entries_of_irreducible [Fintype n] {r : ℝ} (hA_irred
   have hji : A j i * v i = 0 := (Finset.sum_eq_zero_iff_of_nonneg (by
     intro k _
     exact mul_nonneg (hA_irred.1 j k) (hv_nonneg k))).1
-      (by simpa [mulVec_apply, Pi.smul_apply, smul_eq_mul, vj_zero] using
+      (by simpa [mulVec_apply_eq_sum, Pi.smul_apply, smul_eq_mul, vj_zero] using
             congr_fun h_eig j) i (Finset.mem_univ i)
   have hAji_zero : A j i = 0 := by
     exact (mul_eq_zero.mp hji).resolve_right vi_pos.ne'
@@ -152,7 +152,7 @@ theorem exists_positive_eigenvector_of_irreducible [Nonempty n] (hA_irred : A.Is
   rcases h_pos_entry with ⟨i₀, j₀, hA_pos⟩
   -- 4b.  The `i₀`-component of `A * v` is positive.
   have hAv_i₀_pos : 0 < (A *ᵥ v) i₀ := by
-    simpa [mulVec_apply] using
+    simpa [mulVec_apply_eq_sum] using
       (sum_pos_of_mem (s := (Finset.univ : Finset n))
         (fun k _ ↦ mul_nonneg (hA_irred.1 _ _) (le_of_lt (hv_pos k))) j₀ (by simp)
         (by simpa using mul_pos hA_pos (hv_pos j₀)))
@@ -187,7 +187,7 @@ lemma eigenvector_is_positive_of_irreducible {r : ℝ} (hA_irred : A.IsIrreducib
       (A := A) hA_irred hv_nonneg S T hS_nonempty hT_nonempty h_partition h_complement
   have vj_zero : v j = 0 := by simpa [T] using hjT
   have h_sum_zero : (∑ k, A j k * v k) = 0 := by
-    simpa [mulVec_apply, Pi.smul_apply, smul_eq_mul, vj_zero] using
+    simpa [mulVec_apply_eq_sum, Pi.smul_apply, smul_eq_mul, vj_zero] using
       (congrArg (fun f : n → ℝ ↦ f j) h_eig)
   have h_all_zero := (Finset.sum_eq_zero_iff_of_nonneg
     (fun k _ ↦ mul_nonneg (hA_irred.1 j k) (hv_nonneg k))).1 h_sum_zero
@@ -423,7 +423,7 @@ theorem pft_irreducible {n : Type*} [Fintype n] [Nonempty n] [DecidableEq n] {A 
   have h_nonneg : ∀ k ∈ Finset.univ, 0 ≤ A i₀ k * v.val k :=
     fun k _ ↦ mul_nonneg (hA_irred.1 _ _) (le_of_lt (v_pos k))
   have hAv_pos : 0 < (A *ᵥ v.val) i₀ := by
-    simpa [mulVec_apply] using (sum_pos_of_mem (h_nonneg) j₀ (Finset.mem_univ _) (mul_pos hA_pos (v_pos _)))
+    simpa [mulVec_apply_eq_sum] using (sum_pos_of_mem (h_nonneg) j₀ (Finset.mem_univ _) (mul_pos hA_pos (v_pos _)))
   have : 0 < r * v.val i₀ := by
     simpa [Pi.smul_apply, smul_eq_mul, h_eig_A] using hAv_pos
   have hr_pos : 0 < r := (mul_pos_iff_of_pos_right (v_pos _)).1 this

@@ -28,7 +28,7 @@ theorem exists_positive_eigenvector_of_irreducible_stochastic
 
   -- Explicitly typed to n → ℝ so HSMul knows how to apply the scalar
   have h_eig_T : Aᵀ *ᵥ (fun _ ↦ 1 : n → ℝ) = (1 : ℝ) • (fun _ ↦ 1 : n → ℝ) := by
-    ext i; simp [mulVec_apply, h_col_stoch]
+    ext i; simp [mulVec_apply_eq_sum, h_col_stoch]
 
   -- Using rw and .symm directly instead of fighting the elaborator with .trans
   have r_A_eq_one : perronRoot_alt A = 1 := by

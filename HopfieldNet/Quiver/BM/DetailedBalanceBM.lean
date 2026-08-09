@@ -394,7 +394,7 @@ lemma detailed_balance_neg_pos
     have hExpPos : 0 < Real.exp (-(T.β : ℝ) * 𝓒.energy s) := Real.exp_pos _
     have : 0 < Real.exp (-(T.β : ℝ) * 𝓒.energy s) / Z := by
       exact div_pos hExpPos hZpos
-    simpa [Z] using this
+    simpa [Z, 𝓒, HopfieldBoltzmann.CEparams, hopfieldCE] using this
   exact detailed_balance_from_opposite_ratios
           (Pfun:=P) (Kfun:=fun a b => K (u:=u) a b)
           (s:=s) (s':=s') (β:=T.β) (ΔE:=ΔE)

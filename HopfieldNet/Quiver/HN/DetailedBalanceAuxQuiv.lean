@@ -69,8 +69,7 @@ lemma weight_energy_diff_term_v1_ne_u (s s' : (HopfieldNetwork R U).State)
       wθ.w v1 u * s.act v1 * (s'.act u - s.act u) := by
     intro v1 hv1
     simp only [mem_erase, mem_univ] at hv1
-    rw [h v1 hv1.1, sum_eq_sum_diff_singleton_add (mem_erase.mpr ⟨hv1.1.symm, mem_univ u⟩),
-      sdiff_singleton_eq_erase]
+    rw [h v1 hv1.1, ← Finset.sum_erase_add _ _ (mem_erase.mpr ⟨hv1.1.symm, mem_univ u⟩)]
     have hz : ∑ v2 ∈ (univ.erase v1).erase u,
         (wθ.w v1 v2 * s'.act v1 * s'.act v2 - wθ.w v1 v2 * s'.act v1 * s.act v2) = 0 := by
       refine sum_eq_zero fun v2 hv2 => ?_
@@ -93,8 +92,7 @@ lemma weight_energy_sum_split (s s' : (HopfieldNetwork R U).State)
   ∑ v1 ∈ univ, ∑ v2 ∈ filter (fun v2 => v2 ≠ v1) univ, wθ.w v1 v2 * s'.act v1 * s'.act v2 -
   ∑ v1 ∈ univ, ∑ v2 ∈ filter (fun v2 => v2 ≠ v1) univ, wθ.w v1 v2 * s.act v1 * s.act v2 =
   (s'.act u - s.act u) * (∑ v2 ∈ filter (fun v2 => v2 ≠ u) univ, wθ.w u v2 * s.act v2) * 2 := by
-  simp_rw [← sum_sub_distrib, sum_eq_sum_diff_singleton_add (mem_univ u), sdiff_singleton_eq_erase,
-    filter_ne']
+  simp_rw [← sum_sub_distrib, ← Finset.sum_erase_add _ _ (mem_univ u), filter_ne']
   have h_term_u : ∑ v2 ∈ univ.erase u,
       (wθ.w u v2 * s'.act u * s'.act v2 - wθ.w u v2 * s.act u * s.act v2) =
       (s'.act u - s.act u) * ∑ v2 ∈ univ.erase u, wθ.w u v2 * s.act v2 := by
@@ -131,7 +129,7 @@ lemma bias_energy_single_site_diff
   (u : U) (h : ∀ v : U, v ≠ u → s.act v = s'.act v) :
   s'.Eθ wθ - s.Eθ wθ = θ' (wθ.θ u) * (s'.act u - s.act u) := by
   unfold NeuralNetwork.State.Eθ
-  rw [← Finset.sum_sub_distrib, sum_eq_add_sum_diff_singleton_of_mem (mem_univ u), sdiff_singleton_eq_erase]
+  rw [← Finset.sum_sub_distrib, ← Finset.add_sum_erase _ _ (mem_univ u)]
   rw [show ∑ v ∈ univ.erase u, (θ' (wθ.θ v) * s'.act v - θ' (wθ.θ v) * s.act v) = 0 from
     sum_eq_zero fun v hv => by simp only [Finset.mem_erase, Finset.mem_univ] at hv; rw [h v hv.1]; ring,
     add_zero]

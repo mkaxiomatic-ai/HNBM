@@ -8,7 +8,7 @@ import Mathlib.Data.Matrix.Reflection
 import Mathlib.Data.Vector.Defs
 import Init.Data.Vector.Lemmas
 import HopfieldNet.Quiver.NeuralNetwork.Main
-import HopfieldNet.aux
+import HopfieldNet.Auxiliary
 import Mathlib.Tactic
 
 open Finset Matrix NeuralNetwork State

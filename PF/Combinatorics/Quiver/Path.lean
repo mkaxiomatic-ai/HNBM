@@ -274,7 +274,7 @@ namespace Quiver
 
 /-- The quiver structure on a subtype is induced by the quiver structure on the original type.
     An arrow from `a : S` to `b : S` exists if an arrow from `a.val` to `b.val` exists. -/
-def inducedQuiver {V : Type*} [Quiver V] (S : Set V) : Quiver S :=
+@[reducible] def inducedQuiver {V : Type*} [Quiver V] (S : Set V) : Quiver S :=
   ⟨fun a b => a.val ⟶ b.val⟩
 
 end Quiver
@@ -828,7 +828,8 @@ theorem shortest_positive_loop_is_simple [DecidableEq V] {a : V} {c : Path a a}
         have hc_eq : c = c_cycle := by simpa [comp_nil] using hp_comp
         have h_not_simple' : ¬IsSimple c_cycle := hc_eq ▸ h_not_simple
         have h_dup : ∃ x, 2 ≤ (c_cycle.vertices.dropLast).count x := by
-          simpa [IsSimple, List.nodup_iff_not_contains_dup, List.ContainsDup] using h_not_simple'
+          simpa [IsSimple, List.nodup_iff_not_contains_dup, List.ContainsDup,
+            Nat.lt_iff_add_one_le] using h_not_simple'
         obtain ⟨xdup, hx_count⟩ := h_dup
         obtain ⟨i, hi_lt, hi_pos, hi_pred, hi_get⟩ :=
           exists_pos_get_of_dropLast_count_ge_two hx_count

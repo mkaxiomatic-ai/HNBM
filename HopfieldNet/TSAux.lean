@@ -140,7 +140,7 @@ lemma tendsto_c_div_atTop_of_pos {c : ℝ} (hc : 0 < c) :
   have h_inv : Tendsto (fun T : ℝ => T⁻¹) (𝓝[>] (0 : ℝ)) atTop :=
     tendsto_inv_nhdsGT_zero
   have h_mul := tendsto_mul_const_atTop_atTop_of_pos hc
-  simpa [div_eq_mul_inv] using (h_mul.comp h_inv)
+  simpa [div_eq_mul_inv, Function.comp_def] using (h_mul.comp h_inv)
 
 /-- As `T → 0+`, if `c < 0` then `c/T → -∞`. -/
 lemma tendsto_c_div_atBot_of_neg {c : ℝ} (hc : c < 0) :
@@ -148,7 +148,7 @@ lemma tendsto_c_div_atBot_of_neg {c : ℝ} (hc : c < 0) :
   have h_inv : Tendsto (fun T : ℝ => T⁻¹) (𝓝[>] (0 : ℝ)) atTop :=
     tendsto_inv_nhdsGT_zero
   have h_mul := tendsto_mul_const_atTop_atBot_of_neg hc
-  simpa [div_eq_mul_inv] using (h_mul.comp h_inv)
+  simpa [div_eq_mul_inv, Function.comp_def] using (h_mul.comp h_inv)
 
 @[simp]
 lemma signPiece_eq_half_iff_zero {x : ℝ} :

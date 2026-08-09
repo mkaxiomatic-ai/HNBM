@@ -280,7 +280,6 @@ lemma isUnit_of_det_ne_zero' {n : Type*} [Fintype n] [DecidableEq n] (A : Matrix
     (LinearMap.det_toMatrix b f).symm ▸ h_det_f_is_unit
   have h_matrix_representation_is_unit : IsUnit (LinearMap.toMatrix b b f) :=
     (Matrix.isUnit_iff_isUnit_det _).mpr h_det_matrix_form_is_unit
-  simp only at h_matrix_representation_is_unit
   have h_toMatrix_eq_A : LinearMap.toMatrix b b f = A := by
     exact (LinearEquiv.eq_symm_apply (toMatrix b b)).mp rfl
   rw [h_toMatrix_eq_A] at h_matrix_representation_is_unit
@@ -486,7 +485,6 @@ theorem spectralRadius_stochastic_le_one {A : Matrix n n ℝ}
   have h_norm_le_one : ‖L‖ ≤ 1 := by
     apply ContinuousLinearMap.opNorm_le_bound _ (zero_le_one)
     intro v
-    dsimp
     rw [one_mul]
     exact norm_mulVec_le_of_row_stochastic h_stochastic h_nonneg v
   have h_spectral_le_norm : spectralRadius ℝ (Matrix.toLin' A) ≤ ↑‖L‖₊ :=

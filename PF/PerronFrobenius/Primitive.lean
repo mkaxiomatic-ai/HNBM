@@ -50,7 +50,7 @@ variable {n : Type*} [Fintype n] {A : Matrix n n ℝ}
 lemma ratio_le_max_row_sum_simple (hA_nonneg : ∀ i j, 0 ≤ A i j) [Nonempty n]
     {x : n → ℝ} (_ : ∀ i, 0 ≤ x i) (i : n) (hx_i_pos : 0 < x i) :
     (A *ᵥ x) i / x i ≤ (∑ j, A i j) * (univ.sup' univ_nonempty x) / x i := by
-  rw [mulVec_apply, div_le_div_iff_of_pos_right hx_i_pos, Finset.sum_mul]
+  rw [mulVec_apply_eq_sum, div_le_div_iff_of_pos_right hx_i_pos, Finset.sum_mul]
   exact sum_le_sum fun j _ ↦ mul_le_mul_of_nonneg_left (le_sup' x (mem_univ j)) (hA_nonneg i j)
 
 variable [Nonempty n] {A : Matrix n n ℝ}
@@ -64,7 +64,7 @@ lemma collatzWielandtFn_of_ones_is_pos (hA_irred : IsIrreducible A) (hA_nonneg :
     0 < collatzWielandtFn A (fun _ ↦ 1) := by
   dsimp [collatzWielandtFn]; rw [dif_pos ⟨Classical.arbitrary n, by simp⟩]
   refine inf'_pos _ (fun i _ ↦ ?_)
-  simp only [mulVec_apply, mul_one, div_one]
+  simp only [mulVec_apply_eq_sum, mul_one, div_one]
   refine sum_pos_of_nonneg_of_ne_zero (fun j _ ↦ hA_nonneg i j) (fun h_sum ↦ ?_)
   have h_zero : ∀ j, A i j = 0 := fun j ↦ (sum_eq_zero_iff_of_nonneg fun j _ ↦ hA_nonneg i j).mp h_sum j (mem_univ j)
   rcases Nat.eq_one_or_one_lt (Fintype.card n) Fintype.card_ne_zero with h1 | hgt

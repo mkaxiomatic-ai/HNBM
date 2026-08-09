@@ -19,4 +19,4 @@ import HopfieldNet.Quiver.NeuralNetwork.TwoState
 import HopfieldNet.Quiver.NeuralNetwork.Zero_temp
 import HopfieldNet.Quiver.NeuralNetwork.toCanonicalEnsemble
 import HopfieldNet.TSAux
-import HopfieldNet.aux
+import HopfieldNet.Auxiliary

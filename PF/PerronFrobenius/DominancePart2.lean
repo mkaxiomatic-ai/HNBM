@@ -33,7 +33,7 @@ lemma triangle_equality_of_norm_eq_perron_root
     _ = r * x_abs i := by rw [h_norm_eq_r];
     _ = (r • x_abs) i := by simp [smul_eq_mul]
     _ = (A *ᵥ x_abs) i := by rw [h_x_abs_eig]
-    _ = ∑ j, A i j * x_abs j := by simp [mulVec_apply]
+    _ = ∑ j, A i j * x_abs j := by simp [mulVec_apply_eq_sum]
     _ = ∑ j, ‖(A i j : ℂ) * x j‖ := by
         simp_rw [x_abs, norm_mul, norm_ofReal, abs_of_nonneg (hA_nonneg _ _)]
 
@@ -85,7 +85,7 @@ lemma sum_s_ne_zero_of_triangle_eq {A : Matrix n n ℝ} (hA_irred : A.IsIrreduci
   have h_sum_norm_zero : ∑ j, ‖(A i j : ℂ) * x j‖ = 0 := h_triangle_eq i ▸ h_norm_s_zero
   have h_sum_A_x_abs_zero : ∑ j, A i j * x_abs j = 0 := by
     simpa [norm_mul, norm_ofReal, abs_of_nonneg (hA_nonneg _ _)] using h_sum_norm_zero
-  have h_Ax_abs_i_zero : (A *ᵥ x_abs) i = 0 := by simpa [mulVec_apply]
+  have h_Ax_abs_i_zero : (A *ᵥ x_abs) i = 0 := by simpa [mulVec_apply_eq_sum]
   have h_pos := mulVec_x_abs_pos_of_irreducible hA_irred
       (by
         intro k
@@ -324,7 +324,7 @@ lemma sum_eq_perron_root_times_phase_aligned_vector
         apply Finset.sum_congr rfl
         intro j _
         rw [norm_mul, norm_ofReal, abs_of_nonneg (hA_nonneg i j)]
-      _ = (A *ᵥ (fun j => ‖x j‖)) i := by simp [mulVec_apply]
+      _ = (A *ᵥ (fun j => ‖x j‖)) i := by simp [mulVec_apply_eq_sum]
       _ = ((perronRoot_alt A) • (fun j => ‖x j‖)) i := by rw [h_x_abs_eig]
       _ = perronRoot_alt A * ‖x i‖ := by simp [Pi.smul_apply, smul_eq_mul]
   calc ∑ j, z j
@@ -571,7 +571,6 @@ lemma eigenvalue_eq_of_phase_aligned
   have h_cancelled :
       (A.map (algebraMap ℝ ℂ)) *ᵥ x_abs = μ • x_abs := by
     have := congrArg (fun v : n → ℂ ↦ c⁻¹ • v) h_factored
-    simp only at this
     have h_left : c⁻¹ • (c • ((A.map (algebraMap ℝ ℂ)) *ᵥ x_abs)) = (A.map (algebraMap ℝ ℂ)) *ᵥ x_abs := by
       rw [smul_smul, inv_mul_cancel₀ hc_ne_zero, one_smul]
     have h_right : c⁻¹ • (c • (μ • x_abs)) = μ • x_abs := by

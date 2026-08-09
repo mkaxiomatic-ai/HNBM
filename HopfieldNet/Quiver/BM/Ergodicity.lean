@@ -165,7 +165,7 @@ lemma RScol_diag_pos :
         have hK_eq :
             HopfieldBoltzmann.Kbm (NN:=NN) p T u s s
               = probPos (NN:=NN) (RingHom.id ℝ) p T s u := by
-          dsimp [hfix]; grind
+          nth_rewrite 2 [hfix]; exact hK
         have hprob : 0 < probPos (NN:=NN) (RingHom.id ℝ) p T s u := by
           unfold TwoState.probPos; exact logisticProb_pos _
         simpa [hK_eq] using hprob
@@ -404,7 +404,7 @@ lemma singleSiteKernel_pos_of_diffOnly
         HopfieldBoltzmann.Kbm (NN:=NN) p T u s s'
           = probPos (NN:=NN) (RingHom.id ℝ) p T s u := by simpa [hfix] using hK
     have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s' := by
-      simpa [hK_eq] using (logisticProb_pos _)
+      rw [hK_eq]; unfold TwoState.probPos; exact logisticProb_pos _
     simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s'] using
       (ENNReal.ofReal_pos.mpr hreal)
   · have hoff : ∀ v ≠ u, s.act v = s'.act v := h.1
@@ -423,7 +423,9 @@ lemma singleSiteKernel_pos_of_diffOnly
         HopfieldBoltzmann.Kbm (NN:=NN) p T u s s'
           = 1 - probPos (NN:=NN) (RingHom.id ℝ) p T s u := by simpa [hfix] using hK
     have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s' := by
-      simpa [hK_eq] using (one_sub_logistic_pos _)
+      rw [hK_eq]
+      unfold TwoState.probPos
+      exact one_sub_logistic_pos _
     simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s'] using
       (ENNReal.ofReal_pos.mpr hreal)
 
@@ -438,9 +440,9 @@ lemma singleSiteKernel_diag_pos (u : U) (s : NN.State) :
     have hK := Kbm_apply_updPos (NN:=NN) (p:=p) (T:=T) u s
     have hK_eq :
         HopfieldBoltzmann.Kbm (NN:=NN) p T u s s = probPos (NN:=NN) (RingHom.id ℝ) p T s u := by
-      dsimp [hfix]; grind
+      nth_rewrite 2 [hfix]; exact hK
     have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s := by
-      simpa [hK_eq] using (logisticProb_pos _)
+      rw [hK_eq]; unfold TwoState.probPos; exact logisticProb_pos _
     simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s] using
       (ENNReal.ofReal_pos.mpr hreal)
   · have hfix : s = updNeg (NN:=NN) s u := by
@@ -453,7 +455,9 @@ lemma singleSiteKernel_diag_pos (u : U) (s : NN.State) :
           = 1 - probPos (NN:=NN) (RingHom.id ℝ) p T s u := by
       rw [hfix]; grind
     have hreal : 0 < HopfieldBoltzmann.Kbm (NN:=NN) p T u s s := by
-      simpa [hK_eq] using (one_sub_logistic_pos _)
+      rw [hK_eq]
+      unfold TwoState.probPos
+      exact one_sub_logistic_pos _
     simpa [singleSiteKernel_singleton_eval (NN:=NN) (spec:=spec) (p:=p) (T:=T) u s s] using
       (ENNReal.ofReal_pos.mpr hreal)
 

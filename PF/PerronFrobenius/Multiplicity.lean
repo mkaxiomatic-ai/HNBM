@@ -31,7 +31,7 @@ lemma LinearMap.ker_pow_eq_ker_of_ker_sq_eq_ker
         simpa [LinearMap.mem_ker] using hx'
       have : f x ∈ LinearMap.ker f := by simpa [ih] using this
       rw [← h_stable]
-      simpa [LinearMap.mem_ker] using this
+      simpa [LinearMap.mem_ker, pow_two, Module.End.mul_apply] using this
     · intro x hx
       have : (f ^ (m + 1)) (f x) = 0 := by simp_all
       simpa [pow_succ] using this
@@ -56,7 +56,7 @@ lemma geometric_multiplicity_one_of_irreducible
   constructor
   · intro hw_E_r
     have hw_eig : f w = r • w := by
-      simpa [f, r] using (Module.End.mem_eigenspace_iff.mp (by assumption))
+      exact Module.End.mem_eigenspace_iff.mp hw_E_r
     by_cases hw_zero : w = 0
     · subst hw_zero
       exact Submodule.zero_mem _
@@ -69,12 +69,12 @@ lemma geometric_multiplicity_one_of_irreducible
         calc _ = r * |w i| := by simp [w_abs]
              _ = |r * w i| := by rw [abs_mul, abs_of_pos hr_pos]
              _ = |(f w) i| := by rw [hw_eig]; simp
-             _ = |∑ j, A i j * w j| := by simp [f, toLin'_apply, mulVec_apply]
+             _ = |∑ j, A i j * w j| := by simp [f, toLin'_apply, mulVec_apply_eq_sum]
              _ ≤ ∑ j, |A i j * w j| := by
                   simpa using (Finset.abs_sum_le_sum_abs (s := (Finset.univ : Finset n))
                   (f := fun j ↦ A i j * w j))
               _ = ∑ j, A i j * |w j| := by simp_rw [abs_mul, abs_of_nonneg (hA_nonneg i _)]
-              _ = (f w_abs) i := by simp [f, toLin'_apply, mulVec_apply, w_abs]
+              _ = (f w_abs) i := by simp [f, toLin'_apply, mulVec_apply_eq_sum, w_abs]
       have hw_abs_eig : f w_abs = r • w_abs := subinvariant_equality_implies_eigenvector
         hA_irred hA_nonneg hw_abs_nonneg hw_abs_ne_zero h_subinv
       have hw_abs_pos : ∀ i, 0 < w_abs i := eigenvector_is_positive_of_irreducible

@@ -533,7 +533,7 @@ end ConditionallyCompleteLinearOrder
 The definition of the `i`-th component of a matrix-vector product.
 This is standard in Mathlib and often available via `simp`.
 -/
-lemma mulVec_apply {n : Type*} [Fintype n] {A : Matrix n n ℝ} {v : n → ℝ} (i : n) :
+lemma mulVec_apply_eq_sum {n : Type*} [Fintype n] {A : Matrix n n ℝ} {v : n → ℝ} (i : n) :
   (A *ᵥ v) i = ∑ j, A i j * v j :=
 rfl
 
@@ -810,7 +810,7 @@ to the other argument, where it becomes its transpose `Aᵀ`.
 lemma transpose_mulVec {n : Type*} [Fintype n] (A : Matrix n n ℝ) (v w : n → ℝ) :
     v ⬝ᵥ (A *ᵥ w) = (Aᵀ *ᵥ v) ⬝ᵥ w := by
   classical
-  simp only [dotProduct, mulVec_apply, transpose_apply,
+  simp only [dotProduct, mulVec_apply_eq_sum, transpose_apply,
         Finset.mul_sum, Finset.sum_mul];
   rw [Finset.sum_comm]
   simp [mul_comm, mul_left_comm]

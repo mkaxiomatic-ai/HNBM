@@ -75,7 +75,7 @@ structure Wf (P : Problem) : Prop where
   `rowsOf u`. The two agree (`sum_indicator_weighted`); stating it this way keeps the array
   bookkeeping inside `CNS.NetValid` and out of the algebra below. -/
   theta_eq : ∀ u < P.nvars,
-    2 * P.theta.getD u 0
+    P.theta.getD u 0
       = ((P.rowsOf.getD u #[]).size : Int)
         - 2 * ∑ r ∈ Finset.range P.nrows,
             (if (P.rowsOf.getD u #[]).contains r then P.bhat.getD r 0 else 0)
@@ -187,7 +187,7 @@ buys. -/
 theorem Wr_diag (P : Problem) (u : Fin P.nvars) : Wr P u u = 0 := by simp [Wr]
 
 /-- The reduced threshold `θ̂_u`, transported from `Problem.theta`. -/
-noncomputable def thetaR (P : Problem) (u : Fin P.nvars) : ℝ := (P.theta.getD u.val 0 : ℝ)
+noncomputable def thetaR (P : Problem) (u : Fin P.nvars) : ℝ := (P.theta.getD u.val 0 : ℝ) / 2
 
 /-- **The reduced Sudoku QUBO as parameters of the repository's `{0,1}` network.**
 

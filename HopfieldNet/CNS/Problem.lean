@@ -89,7 +89,8 @@ def varsOfSurv (R : Reduced) : Array (Array Nat) :=
 
 /-- `θ̂_u = 2 − Σ_{r ∋ u} b̂_r` for one variable's row set. -/
 def thetaRow (bhat : Array Int) (rs : Array Nat) : Int :=
-  2 - rs.foldl (fun acc r => acc + bhat.getD r 0) 0
+  -- stored doubled: `2θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r`, and every Sudoku variable has degree 4
+  4 - 2 * rs.foldl (fun acc r => acc + bhat.getD r 0) 0
 
 /-- `θ̂`, no longer constant once `b̂` varies row by row. -/
 def thetaOf (R : Reduced) : Array Int := (rowsOfSurv R).map (thetaRow (bhatOf R))

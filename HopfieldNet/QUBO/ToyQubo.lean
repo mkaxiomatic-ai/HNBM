@@ -29,7 +29,7 @@ def toyP : Problem where
   varsOf := #[#[0, 1], #[0, 1], #[1], #[1]]
   bhat := #[1, 1, 0, 0]
   -- `2θ₀ = 2 − 2(b̂₀+b̂₁) = −2` and `2θ₁ = 4 − 2(b̂₀+b̂₁+b̂₂+b̂₃) = 0`
-  theta := #[-1, 0]
+  theta := #[-2, 0]
   constDoubled := 2
   base := #[]
 
@@ -58,6 +58,48 @@ theorem toy_zeroOneHamiltonian_eq (x : Fin toyP.nvars → Bool) :
 
 /-- The two columns really do have different degrees. -/
 example : (toyP.rowsOf.getD 0 #[]).size ≠ (toyP.rowsOf.getD 1 #[]).size := by decide
+
+/-- One variable meeting three rows: column degree `3`, which is **odd**.
+
+This is the guard on the doubled `theta`. Before it, `theta` stored `θ̂_u = ½·deg(u) − Σ b̂_r`
+directly, so an odd degree had no integer representation and the library silently only worked
+for even-degree incidences — a restriction Sudoku's degree `4` hid completely, and which both
+`QUBO.Instances.ExactCover` and `QUBO.Instances.Colouring` had to work around by duplicating
+every row. If this stops compiling, the halving has crept back in. -/
+def toyOdd : Problem where
+  nvars := 1
+  nrows := 3
+  varOf := #[0]
+  rowsOf := #[#[0, 1, 2]]
+  varsOf := #[#[0], #[0], #[0]]
+  bhat := #[1, 1, 1]
+  -- `2θ̂₀ = 3 − 2(1+1+1) = −3`, odd, and therefore unrepresentable before the change
+  theta := #[-3]
+  constDoubled := 3
+  base := #[]
+
+instance : Nonempty (Fin toyOdd.nvars) := ⟨⟨0, by decide⟩⟩
+
+/-- The odd-degree instance is well formed. -/
+theorem toyOdd_wf : toyOdd.Wf where
+  nodup := by decide
+  mem_lt := by decide
+  theta_eq := by
+    intro u hu
+    have hu' : u < 1 := hu
+    interval_cases u <;>
+      simp [toyOdd, Finset.sum_range_succ, Array.getD_eq_getD_getElem?]
+  const_eq := by
+    simp [toyOdd, Finset.sum_range_succ, Array.getD_eq_getD_getElem?]
+
+/-- **The energy bridge holds at an odd column degree.** -/
+theorem toyOdd_zeroOneHamiltonian_eq (x : Fin toyOdd.nvars → Bool) :
+    HopfieldEnergy.zeroOneHamiltonian (netParams toyOdd) (stateOfBits toyOdd x)
+      = (penaltyR toyOdd x - constR toyOdd) / 2 :=
+  zeroOneHamiltonian_eq toyOdd toyOdd_wf x
+
+/-- The degree really is odd. -/
+example : (toyOdd.rowsOf.getD 0 #[]).size = 3 := by decide
 
 end Problem
 end QUBO

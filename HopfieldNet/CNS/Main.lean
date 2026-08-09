@@ -116,9 +116,11 @@ def runEncoding : IO Bool := do
 
 /-- Check the reduced problem's net input against a finite difference of its penalty.
 
-With `W` symmetric and zero-diagonal, `p2` depends on `x_u` only through `-2*x_u*net_u`, so
-setting `x_u` from 0 to 1 must change `p2` by exactly `-2*net_u`. If `theta_hat` or `netVec`
-were wrong, the dynamics would descend a different function from the one being reported. -/
+With `W` symmetric and zero-diagonal, `p2` depends on `x_u` only through `-2*x_u*(field_u)`,
+so setting `x_u` from 0 to 1 must change `p2` by exactly `-2*field_u`. `netVec` returns *twice*
+the local field (`theta` is stored doubled, so an odd column degree is representable), hence
+the expected change is `-netVec_u`. If `theta` or `netVec` were wrong, the dynamics would
+descend a different function from the one being reported. -/
 def runReduced : IO Bool := do
   IO.println "Reduced problem: netVec vs finite difference of p2"
   IO.println ""
@@ -139,7 +141,7 @@ def runReduced : IO Bool := do
         let x0 := x.set! u false
         let x1 := x.set! u true
         let d := P.penaltyDoubled x1 - P.penaltyDoubled x0
-        if d != -2 * (net.getD u 0) then agree := false
+        if d != -(net.getD u 0) then agree := false
         checks := checks + 1
     if !agree then ok := false
     IO.println (pad e.name 12 ++ pad (toString P.nvars) 8 ++ pad (toString checks) 10

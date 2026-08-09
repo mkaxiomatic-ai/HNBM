@@ -175,7 +175,8 @@ def qubo (I : Instance) : Problem where
   rowsOf := (Array.range I.numSets).map I.rowsOfSet
   varsOf := (Array.range (2 * I.groundSize)).map I.colsOfRow
   bhat := (Array.range (2 * I.groundSize)).map fun _ => 1
-  theta := (Array.range I.numSets).map fun i => -((I.setOf i).size : Int)
+  -- stored doubled: `2θ̂_i = deg(i) − 2 Σ_{r ∋ i} b̂_r = 2|Sᵢ| − 4|Sᵢ|`
+  theta := (Array.range I.numSets).map fun i => -2 * ((I.setOf i).size : Int)
   constDoubled := 2 * I.groundSize
   base := #[]
 
@@ -191,7 +192,7 @@ theorem qubo_bhat (I : Instance) {r : Nat} (hr : r < 2 * I.groundSize) :
   map_range_getD _ _ _ hr
 
 theorem qubo_theta (I : Instance) {u : Nat} (hu : u < I.numSets) :
-    (qubo I).theta.getD u 0 = -((I.setOf u).size : Int) :=
+    (qubo I).theta.getD u 0 = -2 * ((I.setOf u).size : Int) :=
   map_range_getD _ _ _ hu
 
 theorem qubo_varOf (I : Instance) {u : Nat} (hu : u < I.numSets) :
@@ -381,8 +382,9 @@ theorem ex1_wf : ex1.Wf := by
 /-- Five variables, eight rows (two copies of four ground-set elements). -/
 example : (qubo ex1).nvars = 5 ∧ (qubo ex1).nrows = 8 := by decide +kernel
 
-/-- `θ̂ᵢ = −|Sᵢ| = −2` for every column here; `ex3` below has columns of different degrees. -/
-example : ∀ i < 5, (qubo ex1).theta.getD i 0 = -2 := by decide +kernel
+/-- `2θ̂ᵢ = −2|Sᵢ| = −4` for every column here (`theta` is stored doubled); `ex3` below has
+columns of different degrees. -/
+example : ∀ i < 5, (qubo ex1).theta.getD i 0 = -4 := by decide +kernel
 
 /-- `S₀ ∪ S₁ = {0,1} ∪ {2,3} = U` is an exact cover, and the encoding sees it. -/
 example : (qubo ex1).penaltyDoubled #[true, true, false, false, false] = 0 := by decide +kernel

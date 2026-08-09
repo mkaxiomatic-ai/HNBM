@@ -167,7 +167,10 @@ def mkSigTable (levels : Nat) (T0 eta : Float) : Array UInt64 := Id.run do
 
 /-- Attach the precomputed logistic table to a configuration. -/
 def ModelConfig.tabulate (cfg : ModelConfig) : ModelConfig :=
-  { cfg with sigTable := mkSigTable cfg.levels cfg.T0 cfg.eta }
+  -- `Problem.netVec` returns *twice* the local field (`theta` is stored doubled, so that an
+  -- odd column degree is representable). Building the table at `2 T` cancels that exactly:
+  -- `exp(2·net / 2T) = exp(net / T)`, so the dynamics are bit-for-bit what they were.
+  { cfg with sigTable := mkSigTable cfg.levels (2.0 * cfg.T0) cfg.eta }
 
 /-- The activation `σ` of eq. (2): `1` if the net input is strictly positive, else `0`. -/
 @[inline] def sigma (u : Int) : Bool := u > 0

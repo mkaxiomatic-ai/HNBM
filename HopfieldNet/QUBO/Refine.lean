@@ -159,7 +159,7 @@ Read off directly, since `netVec` is a `map`: the entry is `4x̂_u − Σ_{r ∋
 this equals `(W x̂)_u − θ̂_u` is `netVec_eq_localField`. -/
 theorem netVec_getD (P : Problem) (x : Array Bool) {u : Nat} (hu : u < P.nvars) :
     (P.netVec x).getD u 0
-      = ((if x.getD u false then ((P.rowsOf.getD u #[]).size : Int) else 0)
+      = 2 * ((if x.getD u false then ((P.rowsOf.getD u #[]).size : Int) else 0)
           - (P.rowsOf.getD u #[]).foldl (fun acc r => acc + (P.rowSums x).getD r 0) 0)
         - P.theta.getD u 0 := by
   show ((Array.range P.nvars).map _).getD u 0 = _
@@ -256,8 +256,8 @@ nose, so a theorem proved for `ZeroOne` at `netParams P` is a theorem about the 
 theorem netVec_eq_localField (P : Problem) [Nonempty (Fin P.nvars)] (hW : P.Wf)
     (x : Array Bool) (u : Fin P.nvars) :
     ((P.netVec x).getD u.val 0 : ℝ)
-      = (stateOfBits P (bitsOf P x)).net (netParams P) u
-        - ((netParams P).θ u).get TwoState.fin0 := by
+      = 2 * ((stateOfBits P (bitsOf P x)).net (netParams P) u
+        - ((netParams P).θ u).get TwoState.fin0) := by
   -- `fnet` omits the diagonal, which `W` sets to zero, so it is the full `mulVec`
   have hnet : (stateOfBits P (bitsOf P x)).net (netParams P) u
       = (Wr P).mulVec (fun v => bit (bitsOf P x v)) u := by
@@ -270,7 +270,7 @@ theorem netVec_eq_localField (P : Problem) [Nonempty (Fin P.nvars)] (hW : P.Wf)
       show (0 : ℝ) = Wr P v v * _
       rw [Wr_diag P v, zero_mul]
     · rw [if_pos h]; rfl
-  have hθ : ((netParams P).θ u).get TwoState.fin0 = (P.theta.getD u.val 0 : ℝ) := rfl
+  have hθ : ((netParams P).θ u).get TwoState.fin0 = (P.theta.getD u.val 0 : ℝ) / 2 := rfl
   -- the four-row fold against `ρ` is the indicator sum against `ρ`
   have hfold : ((((P.rowsOf.getD u.val #[]).foldl
         (fun acc r => acc + (P.rowSums x).getD r 0) (0 : Int)) : Int) : ℝ)
@@ -289,6 +289,7 @@ theorem netVec_eq_localField (P : Problem) [Nonempty (Fin P.nvars)] (hW : P.Wf)
   rw [hnet, hθ, mulVec_Wr P hW _ u, netVec_getD P x u.isLt]
   push_cast
   rw [hfold, hbit]
+  ring
 
 /-- **The paper's activation and `ZeroOne`'s differ exactly on a zero local field.**
 

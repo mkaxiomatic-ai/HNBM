@@ -286,7 +286,8 @@ def problem (I : Instance) : Problem where
   varsOf := (Array.range I.nrows).map fun r =>
     ((List.range I.nvars).filter fun u => (I.rowsOf u).contains r).toArray
   bhat := Array.replicate I.nrows 1
-  theta := (Array.range I.nvars).map fun u => -((I.baseRowList u).length : Int)
+  -- stored doubled: `2θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r = deg(u) − 2·deg(u)`
+  theta := (Array.range I.nvars).map fun u => -2 * ((I.baseRowList u).length : Int)
   constDoubled := (I.nrows : Int)
   base := #[]
 
@@ -307,8 +308,8 @@ theorem problem_bhat {r : Nat} (hr : r < I.nrows) : (problem I).bhat.getD r 0 = 
   simp
 
 theorem problem_theta {u : Nat} (hu : u < I.nvars) :
-    (problem I).theta.getD u 0 = -((I.baseRowList u).length : Int) := by
-  show ((Array.range I.nvars).map fun u => -((I.baseRowList u).length : Int)).getD u 0 = _
+    (problem I).theta.getD u 0 = -2 * ((I.baseRowList u).length : Int) := by
+  show ((Array.range I.nvars).map fun u => -2 * ((I.baseRowList u).length : Int)).getD u 0 = _
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hu)]
   simp
 

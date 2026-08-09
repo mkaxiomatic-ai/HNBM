@@ -33,7 +33,12 @@ structure Problem where
   /-- `b̂ = e − A_F s`, one entry per penalty row. -/
   bhat : Array Int
   /-- `θ̂_u = ½·deg(u) − Σ_{r ∋ u} b̂_r`, with `deg(u) = (rowsOf u).size`. Stored halved;
-  `Wf.theta_eq` states it doubled so that it lives in `ℤ` without a division. -/
+  Stored **doubled**: this field is `2 θ̂_u`, not `θ̂_u`.
+
+  `θ̂_u = ½·deg(u) − Σ_{r ∋ u} b̂_r` is a half-integer whenever `deg(u)` is odd, so storing it
+  directly would silently restrict the library to even-degree incidences — a restriction Sudoku
+  (degree 4) hides, and which bites the moment a subset has odd size or a vertex has even graph
+  degree. Doubling costs nothing and removes it; `thetaR` halves on the way to `ℝ`. -/
   theta : Array Int
   /-- `‖b̂‖²`, i.e. twice the additive constant `½‖b̂‖²`. -/
   constDoubled : Int
@@ -72,7 +77,8 @@ def netVec (P : Problem) (x : Array Bool) : Array Int :=
   let ρ := P.rowSums x
   (Array.range P.nvars).map fun u =>
     let s := (P.rowsOf.getD u #[]).foldl (fun acc r => acc + ρ.getD r 0) 0
-    ((if x.getD u false then ((P.rowsOf.getD u #[]).size : Int) else 0) - s) - P.theta.getD u 0
+    2 * ((if x.getD u false then ((P.rowsOf.getD u #[]).size : Int) else 0) - s)
+      - P.theta.getD u 0
 
 /-- The reduced index of an original variable, when it survived the reduction.
 

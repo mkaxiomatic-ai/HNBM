@@ -2,8 +2,8 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Problem
-import HopfieldNet.CNS.Prng
+import HopfieldNet.QUBO.Problem
+import HopfieldNet.QUBO.Prng
 
 /-!
 # DHNm and BMm: the two neurodynamic models
@@ -48,10 +48,8 @@ anywhere on that path. Only the BMm's logistic needs `Float`, and only to compar
 uniform draw.
 -/
 
-namespace CNS
+namespace QUBO
 
-open QUBO
-open QUBO.Problem
 
 /-! ## Fixed-point logistic
 
@@ -346,4 +344,4 @@ def Model.run (m : Model) (P : Problem) (cfg : ModelConfig) (lvl : Nat) (g : Rng
   | .dhnm => if cfg.sequential then seqRun P cfg false lvl g x0 else (dhnmRun P cfg x0, g)
   | .bmm  => if cfg.sequential then seqRun P cfg true lvl g x0 else bmmRun P cfg lvl g x0
 
-end CNS
+end QUBO

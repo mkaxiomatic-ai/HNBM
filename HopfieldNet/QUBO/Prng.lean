@@ -16,7 +16,7 @@ arithmetic is `UInt64`, so it wraps exactly as specified with no dependence on p
 size.
 -/
 
-namespace CNS
+namespace QUBO
 
 /-- A `splitmix64` generator state. -/
 structure Rng where
@@ -64,4 +64,4 @@ def bits (g : Rng) (len : Nat) : Array Bool × Rng := Id.run do
   return (out, gg)
 
 end Rng
-end CNS
+end QUBO

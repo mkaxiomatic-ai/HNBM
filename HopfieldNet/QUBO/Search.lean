@@ -2,7 +2,7 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Dynamics
+import HopfieldNet.QUBO.Dynamics
 
 /-!
 # Algorithm 2: the collaborative neurodynamic search
@@ -54,10 +54,8 @@ with the current position taken to be the just-computed equilibrium `x̄⁽ⁱ�
 the personal best. That reading is used here.
 -/
 
-namespace CNS
+namespace QUBO
 
-open QUBO
-open QUBO.Problem
 
 /-- Hyperparameters of Algorithm 2. -/
 structure SearchConfig where
@@ -118,6 +116,14 @@ structure SearchConfig where
   one-hot starts every model on the feasible manifold of the cell constraints (11a), leaving the
   dynamics to work on the row, column and block constraints. -/
   oneHotInit : Bool := false
+  /-- Exclusive groups of variables for `oneHotInit`: exactly one member of each group is set
+  in a freshly initialised particle.
+
+  Supplied by the caller rather than read off the problem, because "which variables are mutually
+  exclusive" is a fact about the encoding, not about the QUBO. For Sudoku it is
+  `CNS.Problem.openCellGroups`, one group per still-open cell; for graph colouring it is the
+  colour variables of each vertex. Empty means `oneHotInit` initialises nothing. -/
+  groups : Array (Array Nat) := #[]
   /-- Record a per-outer-iteration trace into `SearchResult.trace`. -/
   trace : Bool := false
   /-- Record the incumbent `x*` at every outer iteration into `SearchResult.boards`, for
@@ -170,7 +176,7 @@ def search (P : Problem) (m : Model) (cfg : SearchConfig) (g0 : Rng) : SearchRes
   let mut vel : Array (Array Float) := Array.replicate cfg.N #[]
   let mut pbest : Array (Array Bool) := Array.replicate cfg.N #[]
   let mut pbestE : Array Int := Array.replicate cfg.N 0
-  let groups := P.openCellGroups
+  let groups := cfg.groups
   for i in [0:cfg.N] do
     let mut bs : Array Bool := Array.replicate nv false
     if cfg.oneHotInit then
@@ -292,4 +298,4 @@ def search (P : Problem) (m : Model) (cfg : SearchConfig) (g0 : Rng) : SearchRes
   return { best := star, penaltyDoubled := starE, outer := outer, solved := starE == 0,
            trace := tr, boards := boards, boardsE := boardsE }
 
-end CNS
+end QUBO

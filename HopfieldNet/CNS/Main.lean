@@ -2,7 +2,8 @@
 Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import HopfieldNet.CNS.Search
+import HopfieldNet.QUBO.Search
+import HopfieldNet.CNS.Problem
 import HopfieldNet.CNS.Exact
 import HopfieldNet.CNS.Instances
 import HopfieldNet.CNS.Solver

@@ -187,7 +187,12 @@ structure Outcome where
 
 This is the certificate check. `Grid.isSolution` is the conjunction of (10a)–(10d) and
 `Grid.extends'` is (10e); `CNS.Sound.penalty_zero_iff_families` is the theorem that these are
-the same conditions the objective encodes. Nothing downstream trusts the search. -/
+the same conditions the objective encodes.
+
+`CNS.Complete.toGrid_completes` proves the check *redundant on a zero-penalty result*: if the
+reduced penalty vanishes then `toGrid` already returns a completion of the givens. It is kept
+anyway, because the search reports `p(x) = 0` from its own arithmetic and the point of the
+architecture is that nothing downstream has to trust it. -/
 def accepts (g sol : Grid) : Bool := sol.isSolution && g.extends' sol
 
 /-- **Solve a puzzle, and never return an unverified answer.**

@@ -335,6 +335,28 @@ theorem Array.getD_toList {α : Type*} (a : Array α) (i : Nat) (d : α) :
   · rw [List.getElem?_eq_none (by simpa using Nat.le_of_not_lt h),
       Array.getElem?_eq_none (Nat.le_of_not_lt h)]
 
+/-- Counting respects pointwise equality of predicates on the list's members. -/
+theorem countP_congr {α : Type*} {p q : α → Bool} : ∀ (l : List α),
+    (∀ v ∈ l, p v = q v) → l.countP p = l.countP q := by
+  intro l
+  induction l with
+  | nil => intro _; rfl
+  | cons a t ih =>
+    intro h
+    rw [List.countP_cons, List.countP_cons, h a (List.mem_cons_self ..),
+      ih (fun v hv => h v (List.mem_cons_of_mem _ hv))]
+
+/-- Folds of additions agree when the summands do. -/
+theorem foldl_add_congr {f g : Nat → Int} : ∀ (l : List Nat), (∀ r ∈ l, f r = g r) →
+    ∀ acc, l.foldl (fun a r => a + f r) acc = l.foldl (fun a r => a + g r) acc := by
+  intro l
+  induction l with
+  | nil => intro _ acc; rfl
+  | cons r t ih =>
+    intro h acc
+    rw [List.foldl_cons, List.foldl_cons, h r (List.mem_cons_self ..),
+      ih (fun v hv => h v (List.mem_cons_of_mem _ hv))]
+
 namespace Problem
 
 /-! ## The reduced index -/
@@ -407,19 +429,8 @@ theorem embed_getD (P : Problem) (s x : Array Bool) {v : Nat} (hv : v < numVars)
 
 /-! ## The bridge -/
 
-/-- Counting respects pointwise equality of predicates on the list's members. -/
-theorem countP_congr {α : Type*} {p q : α → Bool} : ∀ (l : List α),
-    (∀ v ∈ l, p v = q v) → l.countP p = l.countP q := by
-  intro l
-  induction l with
-  | nil => intro _; rfl
-  | cons a t ih =>
-    intro h
-    rw [List.countP_cons, List.countP_cons, h a (List.mem_cons_self ..),
-      ih (fun v hv => h v (List.mem_cons_of_mem _ hv))]
-
 /-- The pinned-to-one flags, read off. -/
-private theorem pinnedOnes_getD (R : Reduced) {v : Nat} (hv : v < numVars) :
+theorem pinnedOnes_getD (R : Reduced) {v : Nat} (hv : v < numVars) :
     (pinnedOnes R).getD v false = (R.isFixed.getD v false && R.fixedVal.getD v false) := by
   show ((Array.range numVars).map _).getD v false = _
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hv)]
@@ -427,7 +438,7 @@ private theorem pinnedOnes_getD (R : Reduced) {v : Nat} (hv : v < numVars) :
   rfl
 
 /-- `b̂` read off at a row. -/
-private theorem bhat_getD (R : Reduced) {r : Nat} (hr : r < numRows) :
+theorem bhat_getD (R : Reduced) {r : Nat} (hr : r < numRows) :
     (ofReduced R).bhat.getD r 0 = bhatRow (pinnedOnes R) r := by
   show (bhatOf R).getD r 0 = _
   unfold bhatOf
@@ -497,17 +508,6 @@ theorem rowCount_embed (R : Reduced) (x : Array Bool) {r : Nat} (hr : r < numRow
   unfold bhatRow
   push_cast
   ring
-
-/-- Folds of additions agree when the summands do. -/
-theorem foldl_add_congr {f g : Nat → Int} : ∀ (l : List Nat), (∀ r ∈ l, f r = g r) →
-    ∀ acc, l.foldl (fun a r => a + f r) acc = l.foldl (fun a r => a + g r) acc := by
-  intro l
-  induction l with
-  | nil => intro _ acc; rfl
-  | cons r t ih =>
-    intro h acc
-    rw [List.foldl_cons, List.foldl_cons, h r (List.mem_cons_self ..),
-      ih (fun v hv => h v (List.mem_cons_of_mem _ hv))]
 
 /-- **The reduced objective is the paper's objective.**
 

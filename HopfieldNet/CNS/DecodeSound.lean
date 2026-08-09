@@ -128,7 +128,7 @@ theorem decode_digitsInRange {x : Array Bool} (hx : penaltyDoubled x = 0) :
 `units` is an append of three `map`s, so a unit is a row, a column or a block; each case
 transports its family constraint through `decode_get_iff`. -/
 
-private theorem mem_units {u : Array Nat} (hu : u ∈ units) :
+theorem mem_units {u : Array Nat} (hu : u ∈ units) :
     (∃ i, i < n ∧ u = rowCells i) ∨ (∃ j, j < n ∧ u = colCells j) ∨
       (∃ b, b < n ∧ u = boxCells b) := by
   unfold units at hu

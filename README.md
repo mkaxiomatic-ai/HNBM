@@ -88,6 +88,8 @@ Everything below is proved outright — no `sorry`, and `#print axioms` reports 
 | `Problem.stateOfBits_workPhase` | a scan over a list of neurons is the library's `workPhase` |
 | `mem_varsOfRowSpec_iff` | `A` read by rows agrees with `A` read by columns — what `cns encoding` checked numerically as `specMatchesTable` |
 | `Problem.penaltyDoubled_embed` | the reduced objective the search descends **is** the paper's `‖Ax − e‖²` under `embed` |
+| `decode_isSolution` | a zero penalty decodes to a solved grid — the converse of `penalty_encode_eq_zero` |
+| `Complete.toGrid_completes` | **a zero reduced penalty gives a completion of the original puzzle**: `Completes g (P.toGrid x)`, which is exactly the certificate `solveCertified` checks at run time |
 
 **The consequence** — minimising the HNBM energy *is* solving the puzzle
 
@@ -101,9 +103,10 @@ Together with `Ergodicity.RSrow_stationary_unique_eq_πBoltzVec` — the random-
 a unique stationary distribution and it is the Boltzmann measure of this energy — that is the
 sense in which the annealed Boltzmann machine concentrates on the solutions.
 
-Verified executably but **not** proved: the converse `p(x) = 0 → isSolution` at grid level
-(exercised by the certificate check on every solve; the variable-level direction is
-`penalty_zero_iff_families`).
+Nothing in the chain is left to run-time checking any more. `Complete.toGrid_completes` closes
+the last step: the certificate `CNS.accepts` verifies on every solve is provably redundant on a
+zero-penalty result. It is kept regardless — the search reports `p(x) = 0` from its own
+arithmetic, and the architecture's point is that nothing downstream has to trust it.
 
 Not formalized: the paper's three theoretical claims about convergence. Those are about the
 *momentum* recurrences of eqs (3) and (6), which are undamped accumulators, are not `Up` of any

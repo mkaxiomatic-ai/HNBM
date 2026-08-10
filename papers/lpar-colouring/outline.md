@@ -89,25 +89,65 @@ The point to make: `netVec_eq_localField` is what stops this being a lookalike. 
 integer routine in the inner loop is proved equal to the network's local field, so the descent
 and concentration results in `QUBO.Minimizers` are about the code.
 
-## 5. Results (§5) — **pending**
+## 5. Results (§5)
 
-Corpus, greedy/DSATUR baselines and the measured table are being generated. The table must
-report, per instance: `n`, `|E|`, known χ, colours used by greedy and DSATUR, and whether the
-neurodynamics finds a zero at palette size χ and at χ+1.
+Measured. `QUBO.search` with BMm, `N = M = 20`, `maxOuter = 60`, `inner = 40`, `T0 = 3.0`,
+`η = 0.9`, one-hot initialisation, base seed 20260806. Baselines are first-fit greedy in index
+order and DSATUR. `vars` is the QUBO's variable count at that palette.
 
-Expected shape of the finding, to be confirmed or contradicted by the numbers: DSATUR matches or
-beats the neurodynamics everywhere at this scale. Write that down if it holds. The results section
-is evidence that the certified solver *works*, not that it is fast.
+| graph | n | \|E\| | χ | Δ+1 | greedy | DSATUR | vars@χ | neuro@χ | avg out | neuro@χ+1 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| K3 | 3 | 3 | 3 | 3 | 3 | 3 | 18 | 10/10 | 1.0 | 10/10 |
+| K4 | 4 | 6 | 4 | 4 | 4 | 4 | 40 | 10/10 | 1.0 | 10/10 |
+| K5 | 5 | 10 | 5 | 5 | 5 | 5 | 75 | 10/10 | 1.3 | 10/10 |
+| Path5 | 5 | 4 | 2 | 3 | 2 | 2 | 18 | 10/10 | 0.2 | 10/10 |
+| C5 | 5 | 5 | 3 | 3 | 3 | 3 | 30 | 10/10 | 1.0 | 10/10 |
+| C6 | 6 | 6 | 2 | 3 | 2 | 2 | 24 | 10/10 | 0.5 | 10/10 |
+| C9 | 9 | 9 | 3 | 3 | 3 | 3 | 54 | 10/10 | 1.0 | 10/10 |
+| K33 | 6 | 9 | 2 | 4 | 2 | 2 | 30 | 10/10 | 0.4 | 10/10 |
+| Crown4 | 8 | 12 | 2 | 4 | **4** | 2 | 40 | 10/10 | 0.8 | 10/10 |
+| Crown6 | 12 | 30 | 2 | 6 | **6** | 2 | 84 | 10/10 | 2.1 | 10/10 |
+| Wheel6 | 7 | 12 | 3 | 7 | 3 | 3 | 57 | 10/10 | 1.7 | 10/10 |
+| Cocktail8 | 8 | 24 | 4 | 7 | 4 | 4 | 128 | 9/10 | 8.1 | 10/10 |
+| Petersen | 10 | 15 | 3 | 4 | 3 | 3 | 75 | 10/10 | 1.6 | 10/10 |
+| Grötzsch | 11 | 20 | 4 | 6 | 4 | 4 | 124 | 10/10 | 2.3 | 10/10 |
+| Myc3 | 23 | 71 | 5 | 12 | 5 | 5 | 470 | **0/3** | 36.7 | 3/3 |
 
-Instances verified working end to end so far:
+A fourth column set, at palette χ−1 where the instance is provably infeasible: the search finds
+no zero on any of the fifteen, terminating with residual penalty 2–12. That column is only
+*meaningful* because of `exists_zero_iff_colourable'` — without completeness, "found no zero"
+would say nothing about colourability.
+
+### What the numbers say
+
+**DSATUR wins outright.** It attains χ on all fifteen instances, in microseconds. Greedy attains
+it on thirteen, losing exactly where it is known to — the crown graphs, bipartite but adversarially
+ordered, where first-fit is dragged to the full Δ+1 (4 and 6 against an optimum of 2). The
+neurodynamics attains χ on fourteen of fifteen and misses the largest: on M(Grötzsch), 470 binary
+variables, it finds nothing at palette 5 in three seeds, though it succeeds at 6.
+
+So the paper cannot claim a performance result, and should not try. What it can claim is that this
+is a colourer whose answers are theorems in both directions, on a corpus where the reference values
+are independently checked. Presented honestly, "a certified solver that is competitive with
+DSATUR on 14 of 15 instances and slower by orders of magnitude" is a defensible short-paper
+result; presented as a speed claim it would be indefensible.
+
+### Provenance of the reference values
+
+The χ column is not cited — it was computed independently, by a backtracking exact colouring
+search written separately from the Lean development, and cross-checked against the claimed values.
+The same check confirmed every graph is simple with no duplicate edges, and that Grötzsch (11
+vertices, 20 edges) and M(Grötzsch) (23 vertices, 71 edges) are genuinely triangle-free. The
+greedy and DSATUR columns and Δ+1 were likewise recomputed independently and agree on every row.
+
+The two neurodynamics columns are the only numbers with a single implementation behind them; they
+are observations of a stochastic heuristic, and the seed and configuration are given above so they
+can be reproduced.
+
+### Instances verified end to end elsewhere
 
 | instance | palette | result |
 |---|---|---|
-| K₃ | 3 | solved, `210` |
-| C₅ | 3 | solved, `21020` |
-| Petersen | 3 | solved, `2020111022` |
-| K₄ | 3 | no zero — correctly infeasible |
-| C₅ | 2 | no zero — correctly infeasible |
 | K₃ edge colouring | 3 | solved, `[2,1,0]` |
 | P₄ edge colouring | 2 | solved, `[1,0,1]` |
 | K₃ edge colouring | 2 | no zero — correct, χ′(K₃) = 3 |
@@ -153,9 +193,10 @@ State these plainly rather than letting a referee find them:
 
 ## 9. Open items before submission
 
-1. Results table — §5, in progress. The only empty section.
-2. Remove the row duplication — §3.
-3. Verify the two 1980s–90s citations against the originals. Both were recalled, not read.
+1. Remove the row duplication — §3. The reported `vars` counts are 2× the natural ones.
+2. Verify the two 1980s–90s citations against the originals. Both were recalled, not read; the
+   same goes for Brélaz's issue and page numbers.
+3. Consider whether Myc3's failure at χ deserves more than three seeds before it goes in a table.
 5. Decide the fate of the Sudoku reproducibility material. It is the strongest self-contained
    story in the repository (the paper states no `W`, no `θ` and no hyperparameter; two recovered
    constants decide success; Table I is now a theorem; proving it caught real specification bugs)

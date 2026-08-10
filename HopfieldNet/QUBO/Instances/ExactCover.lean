@@ -17,18 +17,25 @@ which is already `‖Â x − b̂‖²` with `b̂ = 1`: one row per ground-set e
 subset, `Â_{α i} = 1` iff `α ∈ Sᵢ`. **No slack variables.** The variable count is `k`, the number
 of subsets, independent of `m`.
 
-## Why the rows are duplicated
+## Why `theta` has to be stored doubled — the sharpest case in the library
 
-`Problem.theta` is `Array Int` and `Wf.theta_eq` reads
+`Problem.theta` is an `Array Int`, and it holds `2 θ̂_u`, not `θ̂_u`: `Wf.theta_eq` reads
 
-  `2 θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r`,
+  `theta u = deg(u) − 2 Σ_{r ∋ u} b̂_r`.
 
-so `θ̂_u ∈ ℤ` forces `deg(u)` to be **even**. With one row per ground-set element the degree of
-column `i` is `|Sᵢ|`, which is odd whenever `Sᵢ` is. The theory is degree-*free* but not
-parity-free, so we take two copies of every ground-set row: rows `α` and `α + m` both carry the
-constraint "element `α` is covered once". Then `deg(i) = 2|Sᵢ|` and `θ̂_i = −|Sᵢ|`, and the
-objective is `2H/A` — the same zero set, twice the value. This is not a slack variable: no new
-column is introduced, only a repeated equation.
+Exact cover is where that convention earns its keep. One row per ground-set element makes the
+degree of column `i` equal to `|Sᵢ|`, and with `b̂ ≡ 1` we get `Σ_{r ∋ i} b̂_r = |Sᵢ|`, hence
+
+  `theta i = |Sᵢ| − 2|Sᵢ| = −|Sᵢ|`,
+
+an integer **whatever the parity of `|Sᵢ|`**. Had `theta` stored `θ̂` directly it would have to
+hold `½|Sᵢ| − |Sᵢ| = −|Sᵢ|/2`, which is not an integer as soon as some subset has odd size — and
+`ex3` below contains the singleton `S₀ = {0}`. Nothing about exact cover controls the parity of a
+subset's size, so under the halved convention this encoding is only representable at all after
+taking **two** copies of every ground-set row (rows `α` and `α + m` both asserting "element `α` is
+covered once") to force every degree even, at the price of doubling `nrows`, the objective value
+and the work per sweep. The doubled `theta` removes that entirely: one row per element, `nrows =
+m`, `θ̂` exact. `Problem.thetaR` halves on the way to `ℝ`, where halving is free.
 
 The degrees still vary from column to column whenever the subsets have different sizes, so this
 is a genuine exercise of the degree-free theory of `QUBO.Net`, like `QUBO.ToyQubo`.
@@ -209,18 +216,17 @@ structure Wf (I : Instance) : Prop where
 
 /-! ### The columns and rows
 
-`rowsOfSet i` is `Sᵢ` together with its shift by `m`: the two copies of each ground-set row. -/
+`Â` is the incidence matrix of the family itself: row `α` per ground-set element, column `i` per
+subset, `Â_{α i} = 1` iff `α ∈ Sᵢ`. So the rows met by column `i` are literally the elements of
+`Sᵢ` — there is no separate `rowsOfSet`, and `qubo.rowsOf` is `Instance.setOf`. Only `colsOfRow`,
+the transpose, needs computing. -/
 
-/-- The constraint rows met by column `i`: element `α ∈ Sᵢ` gives rows `α` and `α + m`. -/
-def rowsOfSet (I : Instance) (i : Nat) : Array Nat :=
-  I.setOf i ++ (I.setOf i).map (· + I.groundSize)
-
-/-- The columns meeting row `r`: the subsets containing the ground-set element `r % m`.
+/-- The columns meeting row `r`: the subsets containing the ground-set element `r`.
 
 Built with `List.filter` and not `Array.filter`: the latter carries an optional
 `stop := as.size` argument whose unification forces `(Array.range _).size` to whnf. -/
 def colsOfRow (I : Instance) (r : Nat) : Array Nat :=
-  ((List.range I.numSets).filter fun i => (I.setOf i).contains (r % I.groundSize)).toArray
+  ((List.range I.numSets).filter fun i => (I.setOf i).contains r).toArray
 
 end Instance
 
@@ -230,34 +236,34 @@ open Instance
 
 /-- **Exact cover as a `QUBO.Problem`.**
 
-`k = |sets|` variables, `2m` rows, `b̂ ≡ 1`, `θ̂_i = −|Sᵢ|`, `‖b̂‖² = 2m`. Every field is a `map`
-over an index range — never a `for` loop with `set!` — so each is characterised pointwise by
-`map_range_getD`. -/
+`k = |sets|` variables, `m` rows, `b̂ ≡ 1`, `θ̂_i = −|Sᵢ|/2` (so `theta i = −|Sᵢ|`), `‖b̂‖² = m`.
+Every field is a `map` over an index range — never a `for` loop with `set!` — so each is
+characterised pointwise by `map_range_getD`. -/
 def qubo (I : Instance) : Problem where
   nvars := I.numSets
-  nrows := 2 * I.groundSize
+  nrows := I.groundSize
   varOf := Array.range I.numSets
-  rowsOf := (Array.range I.numSets).map I.rowsOfSet
-  varsOf := (Array.range (2 * I.groundSize)).map I.colsOfRow
-  bhat := (Array.range (2 * I.groundSize)).map fun _ => 1
-  -- stored doubled: `2θ̂_i = deg(i) − 2 Σ_{r ∋ i} b̂_r = 2|Sᵢ| − 4|Sᵢ|`
-  theta := (Array.range I.numSets).map fun i => -2 * ((I.setOf i).size : Int)
-  constDoubled := 2 * I.groundSize
+  rowsOf := (Array.range I.numSets).map I.setOf
+  varsOf := (Array.range I.groundSize).map I.colsOfRow
+  bhat := (Array.range I.groundSize).map fun _ => 1
+  -- stored doubled: `2θ̂_i = deg(i) − 2 Σ_{r ∋ i} b̂_r = |Sᵢ| − 2|Sᵢ|`, integer at any parity
+  theta := (Array.range I.numSets).map fun i => -((I.setOf i).size : Int)
+  constDoubled := (I.groundSize : Int)
   base := #[]
 
 @[simp] theorem qubo_nvars (I : Instance) : (qubo I).nvars = I.numSets := rfl
-@[simp] theorem qubo_nrows (I : Instance) : (qubo I).nrows = 2 * I.groundSize := rfl
+@[simp] theorem qubo_nrows (I : Instance) : (qubo I).nrows = I.groundSize := rfl
 
 theorem qubo_rowsOf (I : Instance) {u : Nat} (hu : u < I.numSets) :
-    (qubo I).rowsOf.getD u #[] = I.rowsOfSet u :=
+    (qubo I).rowsOf.getD u #[] = I.setOf u :=
   map_range_getD _ _ _ hu
 
-theorem qubo_bhat (I : Instance) {r : Nat} (hr : r < 2 * I.groundSize) :
+theorem qubo_bhat (I : Instance) {r : Nat} (hr : r < I.groundSize) :
     (qubo I).bhat.getD r 0 = 1 :=
   map_range_getD _ _ _ hr
 
 theorem qubo_theta (I : Instance) {u : Nat} (hu : u < I.numSets) :
-    (qubo I).theta.getD u 0 = -2 * ((I.setOf u).size : Int) :=
+    (qubo I).theta.getD u 0 = -((I.setOf u).size : Int) :=
   map_range_getD _ _ _ hu
 
 theorem qubo_varOf (I : Instance) {u : Nat} (hu : u < I.numSets) :
@@ -266,93 +272,15 @@ theorem qubo_varOf (I : Instance) {u : Nat} (hu : u < I.numSets) :
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hu)]
   simp
 
-/-! ### Structure of a column -/
+/-! ### Structure of a column
 
-/-- A column is `Sᵢ` and its shifted copy, and nothing else. -/
-theorem mem_rowsOfSet (I : Instance) (i r : Nat) :
-    r ∈ I.rowsOfSet i ↔ (r ∈ I.setOf i ∨ ∃ a ∈ I.setOf i, a + I.groundSize = r) := by
-  unfold Instance.rowsOfSet
-  rw [Array.mem_append]
-  constructor
-  · rintro (h | h)
-    · exact Or.inl h
-    · obtain ⟨a, ha, rfl⟩ := Array.mem_map.mp h
-      exact Or.inr ⟨a, ha, rfl⟩
-  · rintro (h | ⟨a, ha, rfl⟩)
-    · exact Or.inl h
-    · exact Or.inr (Array.mem_map.mpr ⟨a, ha, rfl⟩)
-
-/-- Each column has twice the size of its subset — in particular an even degree, which is what
-lets `θ̂` be an integer. -/
-theorem rowsOfSet_size (I : Instance) (i : Nat) :
-    (I.rowsOfSet i).size = 2 * (I.setOf i).size := by
-  simp [Instance.rowsOfSet, Nat.two_mul]
-
-/-- The two copies of a row are distinct, so a column meets each of its rows exactly once. -/
-theorem rowsOfSet_nodup (I : Instance) (hI : I.Wf) {i : Nat} (hi : i < I.numSets) :
-    (I.rowsOfSet i).toList.Nodup := by
-  have hnd := hI.nodup i hi
-  have hlt := hI.mem_lt i hi
-  rw [Instance.rowsOfSet, Array.toList_append, Array.toList_map, List.nodup_append]
-  refine ⟨hnd, hnd.map (fun a b h => by omega), ?_⟩
-  intro a ha b hb
-  obtain ⟨c, _, rfl⟩ := List.mem_map.mp hb
-  have h1 : a < I.groundSize := hlt a (Array.mem_toList_iff.mp ha)
-  omega
-
-/-- Every listed row is a real row. -/
-theorem rowsOfSet_mem_lt (I : Instance) (hI : I.Wf) {i : Nat} (hi : i < I.numSets) :
-    ∀ r ∈ I.rowsOfSet i, r < 2 * I.groundSize := by
-  intro r hr
-  rcases (mem_rowsOfSet I i r).mp hr with h | ⟨a, ha, rfl⟩
-  · have := hI.mem_lt i hi r h; omega
-  · have := hI.mem_lt i hi a ha; omega
-
-/-- **On the lower copy of the rows, membership in the column is membership in the subset.**
-
-This is what makes the first `m` rows readable as Lucas's constraints. -/
-theorem contains_rowsOfSet_lo (I : Instance) (i : Nat) {a : Nat} (ha : a < I.groundSize) :
-    (I.rowsOfSet i).contains a = (I.setOf i).contains a := by
-  have hiff : a ∈ I.rowsOfSet i ↔ a ∈ I.setOf i := by
-    rw [mem_rowsOfSet]
-    refine ⟨fun h => ?_, Or.inl⟩
-    rcases h with h | ⟨b, _, hb⟩
-    · exact h
-    · omega
-  have h1 : ((I.rowsOfSet i).contains a = true) ↔ ((I.setOf i).contains a = true) := by
-    rw [Array.contains_iff_mem, Array.contains_iff_mem]; exact hiff
-  cases hr : (I.rowsOfSet i).contains a <;> cases hc : (I.setOf i).contains a <;> simp_all
-
-/-- **On the upper copy of the rows, membership in the column is membership in the subset,
-shifted.** Row `a + m` carries the same constraint as row `a`. -/
-theorem contains_rowsOfSet_hi (I : Instance) (hI : I.Wf) {i : Nat} (hi : i < I.numSets)
-    {r : Nat} (hlo : I.groundSize ≤ r) :
-    (I.rowsOfSet i).contains r = (I.setOf i).contains (r - I.groundSize) := by
-  have hiff : r ∈ I.rowsOfSet i ↔ (r - I.groundSize) ∈ I.setOf i := by
-    rw [mem_rowsOfSet]
-    constructor
-    · rintro (h | ⟨a, ha, rfl⟩)
-      · have := hI.mem_lt i hi r h; omega
-      · simpa using ha
-    · intro h
-      exact Or.inr ⟨r - I.groundSize, h, by have := hI.mem_lt i hi _ h; omega⟩
-  have h1 : ((I.rowsOfSet i).contains r = true)
-      ↔ ((I.setOf i).contains (r - I.groundSize) = true) := by
-    rw [Array.contains_iff_mem, Array.contains_iff_mem]; exact hiff
-  cases hr : (I.rowsOfSet i).contains r <;>
-    cases hc : (I.setOf i).contains (r - I.groundSize) <;> simp_all
-
-/-- **Both copies at once**: row `r < 2m` is the constraint for the ground-set element `r % m`.
-The uniform reading of a column used by the completeness proof. -/
-theorem contains_rowsOfSet (I : Instance) (hI : I.Wf) {i : Nat} (hi : i < I.numSets)
-    {r : Nat} (hr : r < 2 * I.groundSize) :
-    (I.rowsOfSet i).contains r = (I.setOf i).contains (r % I.groundSize) := by
-  by_cases h : r < I.groundSize
-  · rw [Nat.mod_eq_of_lt h, contains_rowsOfSet_lo I i h]
-  · have hm : I.groundSize ≤ r := by omega
-    rw [show r % I.groundSize = r - I.groundSize from by
-        rw [Nat.mod_eq_sub_mod hm, Nat.mod_eq_of_lt (by omega)],
-      contains_rowsOfSet_hi I hI hi hm]
+There is nothing left to say. Under the duplicated encoding this section held six lemmas —
+`mem_rowsOfSet`, `rowsOfSet_size`, `rowsOfSet_nodup`, `rowsOfSet_mem_lt` and the shift
+dictionary `contains_rowsOfSet_lo` / `contains_rowsOfSet_hi` / `contains_rowsOfSet`, which
+translated "row `r < 2m`" into "ground-set element `r % m`". With one row per element the column
+of `qubo I` *is* `I.setOf i` (`qubo_rowsOf`), its size is `|Sᵢ|`, and the two structural facts
+about it — duplicate-freeness and in-rangeness — are verbatim the two fields of `Instance.Wf`.
+So the whole dictionary is `qubo_rowsOf`, and every proof below reads a row index directly. -/
 
 /-! ### Well-formedness -/
 
@@ -364,43 +292,42 @@ theorem qubo_wf (I : Instance) (hI : I.Wf) : (qubo I).Wf where
   nodup := by
     intro u hu
     rw [qubo_rowsOf I hu]
-    exact rowsOfSet_nodup I hI hu
+    exact hI.nodup u hu
   mem_lt := by
     intro u hu r hr
     rw [qubo_rowsOf I hu] at hr
-    exact rowsOfSet_mem_lt I hI hu r hr
+    exact hI.mem_lt u hu r hr
   theta_eq := by
     intro u hu
-    have hrows : (qubo I).rowsOf.getD u #[] = I.rowsOfSet u := qubo_rowsOf I hu
+    have hrows : (qubo I).rowsOf.getD u #[] = I.setOf u := qubo_rowsOf I hu
     have hsum : ∑ r ∈ Finset.range (qubo I).nrows,
           (if ((qubo I).rowsOf.getD u #[]).contains r then (qubo I).bhat.getD r 0 else 0)
-        = ((I.rowsOfSet u).size : Int) := by
-      rw [show (qubo I).nrows = 2 * I.groundSize from rfl]
+        = ((I.setOf u).size : Int) := by
+      rw [show (qubo I).nrows = I.groundSize from rfl]
       rw [Finset.sum_congr rfl (fun r hr => by
         rw [hrows, qubo_bhat I (Finset.mem_range.mp hr)])]
-      exact sum_indicator_card (I.rowsOfSet u) (rowsOfSet_nodup I hI hu)
-        (rowsOfSet_mem_lt I hI hu)
-    rw [qubo_theta I hu, hsum, hrows, rowsOfSet_size]
-    push_cast
+      exact sum_indicator_card (I.setOf u) (hI.nodup u hu) (hI.mem_lt u hu)
+    -- `theta u = |Sᵢ| − 2|Sᵢ| = −|Sᵢ|`: no parity condition, and no factor of two to divide out
+    rw [qubo_theta I hu, hsum, hrows]
     ring
   const_eq := by
-    show (2 * I.groundSize : Int) = _
+    show (I.groundSize : Int) = _
     rw [Finset.sum_congr rfl (fun r hr => by
       rw [qubo_bhat I (Finset.mem_range.mp (by simpa using hr))])]
-    simp [mul_comm]
+    simp
 
 /-! ## The incidence
 
 Exact cover as a value of `QUBO.Incidence`, with `qubo I` its (trivial) column restriction: no
 column is deleted, so `varOf` is the identity. -/
 
-/-- **The exact-cover incidence**: `2m` rows, one column per subset. -/
+/-- **The exact-cover incidence**: `m` rows, one column per subset, column `i` being `Sᵢ`. -/
 def inc (I : Instance) (hI : I.Wf) : Incidence where
   nvars := I.numSets
-  nrows := 2 * I.groundSize
-  rowsOf := I.rowsOfSet
-  nodup := fun _ h => rowsOfSet_nodup I hI h
-  mem_lt := fun _ h => rowsOfSet_mem_lt I hI h
+  nrows := I.groundSize
+  rowsOf := I.setOf
+  nodup := fun _ h => hI.nodup _ h
+  mem_lt := fun _ h => hI.mem_lt _ h
 
 /-- The problem refines its incidence along the identity. -/
 theorem refines (I : Instance) (hI : I.Wf) : Problem.Refines (inc I hI) (qubo I) where
@@ -498,9 +425,9 @@ theorem countP_decode (I : Instance) (x : Array Bool) (a : Nat) :
 
 /-- **Soundness of the encoding**: a zero of the objective decodes to an exact cover.
 
-`penaltyDoubled = 0` says every one of the `2m` rows has row sum `1`; reading the lower `m`
-rows through `contains_rowsOfSet_lo` says every ground-set element lies in exactly one chosen
-subset, which is exactly what `coversExactly` checks. -/
+`penaltyDoubled = 0` says every one of the `m` rows has row sum `1`, and row `a` *is* the
+constraint "element `a` is covered once" — column `i` meets it exactly when `a ∈ Sᵢ`
+(`qubo_rowsOf`). That is exactly what `coversExactly` checks. -/
 theorem decode_coversExactly (I : Instance) (hI : I.Wf) (x : Array Bool)
     (hx : (qubo I).penaltyDoubled x = 0) :
     coversExactly I (decode I x) = true := by
@@ -508,17 +435,16 @@ theorem decode_coversExactly (I : Instance) (hI : I.Wf) (x : Array Bool)
   rw [coversExactly, List.all_eq_true]
   intro a ha
   have ha' : a < I.groundSize := List.mem_range.mp ha
-  have harow : a < (qubo I).nrows := by simpa using by omega
+  have harow : a < (qubo I).nrows := by simpa using ha'
   -- the row sum of row `a` is `b̂_a = 1`
   have hrow := rowSums_eq_bhat_of_penalty_zero (qubo I) x hx harow
-  rw [Problem.rowSums_spec (qubo I) hW x harow, qubo_bhat I (by simpa using harow)] at hrow
+  rw [Problem.rowSums_spec (qubo I) hW x harow, qubo_bhat I ha'] at hrow
   -- rewrite the count into the checker's count
   have hcnt : (List.range (qubo I).nvars).countP
         (fun u => x.getD u false && ((qubo I).rowsOf.getD u #[]).contains a)
       = (List.range I.numSets).countP (fun i => x.getD i false && (I.setOf i).contains a) := by
     refine List.countP_congr (fun i hi => ?_)
-    have hi' : i < I.numSets := List.mem_range.mp hi
-    rw [qubo_rowsOf I hi', contains_rowsOfSet_lo I i ha']
+    rw [qubo_rowsOf I (List.mem_range.mp hi)]
   rw [hcnt] at hrow
   rw [beq_iff_eq, countP_decode]
   exact_mod_cast hrow
@@ -546,22 +472,21 @@ theorem encode_penalty_zero (I : Instance) (hI : I.Wf) {sel : Array Nat}
     (qubo I).penaltyDoubled (encode I sel) = 0 := by
   have hW := qubo_wf I hI
   refine penalty_zero_of_rowSums_eq (qubo I) _ (fun r hr => ?_)
-  have hr' : r < 2 * I.groundSize := by simpa using hr
-  have ha : r % I.groundSize < I.groundSize := Nat.mod_lt _ (by omega)
+  have hr' : r < I.groundSize := by simpa using hr
   rw [Problem.rowSums_spec (qubo I) hW _ hr, qubo_bhat I hr']
-  -- the row sum of row `r` counts the chosen subsets containing the element `r % m`
+  -- the row sum of row `r` counts the chosen subsets containing the element `r`
   have hcnt : (List.range (qubo I).nvars).countP
         (fun u => (encode I sel).getD u false && ((qubo I).rowsOf.getD u #[]).contains r)
       = (List.range I.numSets).countP
-          (fun i => sel.contains i && (I.setOf i).contains (r % I.groundSize)) := by
+          (fun i => sel.contains i && (I.setOf i).contains r) := by
     refine List.countP_congr (fun i hi => ?_)
     have hi' : i < I.numSets := List.mem_range.mp hi
-    rw [encode_getD I sel hi', qubo_rowsOf I hi', contains_rowsOfSet I hI hi' hr']
+    rw [encode_getD I sel hi', qubo_rowsOf I hi']
   rw [hcnt]
   -- and the checker says that count is one
-  have hcov : sel.toList.countP (fun i => (I.setOf i).contains (r % I.groundSize)) = 1 := by
-    simpa using (List.all_eq_true.mp hsel) (r % I.groundSize) (List.mem_range.mpr ha)
-  have hp : ∀ i, ((I.setOf i).contains (r % I.groundSize)) = true → i < I.numSets := by
+  have hcov : sel.toList.countP (fun i => (I.setOf i).contains r) = 1 := by
+    simpa using (List.all_eq_true.mp hsel) r (List.mem_range.mpr hr')
+  have hp : ∀ i, ((I.setOf i).contains r) = true → i < I.numSets := by
     intro i hi
     by_contra hcon
     rw [setOf_of_le I (by omega)] at hi
@@ -599,12 +524,12 @@ theorem ex1_wf : ex1.Wf := by
   · decide
   · decide
 
-/-- Five variables, eight rows (two copies of four ground-set elements). -/
-example : (qubo ex1).nvars = 5 ∧ (qubo ex1).nrows = 8 := by decide +kernel
+/-- Five variables, four rows — one per ground-set element. -/
+example : (qubo ex1).nvars = 5 ∧ (qubo ex1).nrows = 4 := by decide +kernel
 
-/-- `2θ̂ᵢ = −2|Sᵢ| = −4` for every column here (`theta` is stored doubled); `ex3` below has
-columns of different degrees. -/
-example : ∀ i < 5, (qubo ex1).theta.getD i 0 = -4 := by decide +kernel
+/-- `2θ̂ᵢ = −|Sᵢ| = −2` for every column here, since every subset of `ex1` has size two
+(`theta` is stored doubled); `ex3` below has columns of different degrees, one of them odd. -/
+example : ∀ i < 5, (qubo ex1).theta.getD i 0 = -2 := by decide +kernel
 
 /-- `S₀ ∪ S₁ = {0,1} ∪ {2,3} = U` is an exact cover, and the encoding sees it. -/
 example : (qubo ex1).penaltyDoubled #[true, true, false, false, false] = 0 := by decide +kernel
@@ -688,8 +613,10 @@ Prints `true`. -/
   let x := (Array.range 2).map m.testBit
   ((qubo ex2).penaltyDoubled x != 0) && !coversExactly ex2 (decode ex2 x)
 
-/-- An instance with columns of **different** degrees — `|S₀| = 1` and `|S₁| = 3`, so degrees
-`2` and `6`. Any proof that smuggled in regularity would fail here. -/
+/-- An instance with columns of **different, and odd, degrees** — `|S₀| = 1` and `|S₁| = 3`, so
+`theta 0 = −1` and `theta 1 = −3`. Any proof that smuggled in regularity would fail here, and
+under the halved `theta` of the module docstring this instance would not be representable at all:
+`θ̂₀ = −1/2 ∉ ℤ`. -/
 def ex3 : Instance := ⟨4, #[#[0], #[1, 2, 3], #[0, 1], #[2, 3]]⟩
 
 theorem ex3_wf : ex3.Wf := by
@@ -699,8 +626,11 @@ theorem ex3_wf : ex3.Wf := by
 
 example : ((qubo ex3).rowsOf.getD 0 #[]).size ≠ ((qubo ex3).rowsOf.getD 1 #[]).size := by decide +kernel
 
-/-- `S₀ ∪ S₁ = {0} ∪ {1,2,3} = U`: an exact cover with an odd-sized subset, which is exactly the
-case the row duplication exists to handle. -/
+/-- The odd degrees, and the odd doubled thresholds they produce. -/
+example : (qubo ex3).theta.getD 0 0 = -1 ∧ (qubo ex3).theta.getD 1 0 = -3 := by decide +kernel
+
+/-- `S₀ ∪ S₁ = {0} ∪ {1,2,3} = U`: an exact cover with odd-sized subsets, which is exactly the
+case the doubled `theta` exists to handle. -/
 example : (qubo ex3).penaltyDoubled #[true, true, false, false] = 0 := by decide +kernel
 
 example : coversExactly ex3 (decode ex3 #[true, true, false, false]) = true :=

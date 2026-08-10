@@ -8,14 +8,41 @@ Status key: **✓** proved and axiom-clean (`propext`, `Classical.choice`, `Quot
 
 ---
 
+## 0. Relation to the main paper
+
+This is a **companion short paper** to our accepted LPAR paper, which formalises the
+Hopfield/Boltzmann machinery itself (`HopfieldNet/Quiver/`: `NeuralNetwork`, `TwoState.ZeroOne`,
+the Boltzmann machine, Lyapunov descent, Gibbs stationarity, ergodicity). None of that is
+re-argued here; it is cited and used.
+
+**TODO** — fill in the main paper's exact title, authors and citation once available, and check
+against it which of the results below are already stated there versus new here.
+
+What this paper adds, and the whole of what it claims:
+
+1. that the formalised library is **reusable** — a second problem domain costs an encoding and a
+   decoder, not a second development;
+2. a graph colourer whose encoding is proved faithful **in both directions**, so its negative
+   answers mean something;
+3. that the *running* solver is the network the theorems are about, not a lookalike;
+4. an executable, watchable artifact — the infoview widgets;
+5. an honest benchmark against the classical algorithms.
+
+The framing matters. Read as "neural graph colouring", this is thirty years late: Dahl (1987) and
+Takefuji–Lee (1991) coloured graphs with Hopfield networks, and on our corpus DSATUR beats us
+outright. Read as "here is what the formalisation from the main paper buys, demonstrated on a
+problem it was not built for", it is exactly the kind of evidence a formalisation paper is
+usually missing. §5 reports the performance gap plainly rather than working around it, because the
+claim is reuse and certification, not speed.
+
 ## 1. The claim
 
-A graph colourer built from a Hopfield/Boltzmann network, where the *encoding* is proved correct
-in both directions and the *solver* is proved to be minimising the objective the encoding
-defines. Not a faster colourer — a colourer whose answers are theorems.
+A graph colourer built from the HNBM library of the main paper, where the *encoding* is proved
+correct in both directions and the *solver* is proved to be minimising the objective the encoding
+defines. Not a faster colourer — a colourer whose answers are theorems, obtained by instantiating
+an existing formalisation rather than by writing a new one.
 
-Colouring by Hopfield network is old (Dahl 1987; Takefuji–Lee 1991) and on the graph sizes here a
-greedy method wins outright. The contribution is that nothing in the chain is taken on trust:
+Nothing in the chain is taken on trust:
 
 ```
 proper colouring  ⟷  p(x) = 0  ⟷  minimiser of the HNBM energy  ←  what the code iterates
@@ -24,13 +51,14 @@ proper colouring  ⟷  p(x) = 0  ⟷  minimiser of the HNBM energy  ←  what th
 
 The left equivalence makes the encoding faithful; the right one makes the network's energy *be*
 the objective; the last arrow makes the theorems statements about the running program rather than
-about an idealisation of it.
+about an idealisation of it. Only the middle equivalence comes from the main paper — the two ends
+are this paper's work.
 
 The left equivalence is `exists_zero_iff_colourable'`, and it carries **no** side condition —
 not even a non-empty palette. The degenerate case is discharged rather than excluded: an empty
 palette admits no vertex row, forcing `nverts = 0`, and `edgesOk` then forces no edges, so `#[]`
-is a proper colouring. Worth a sentence in the paper, because "we assume a non-empty palette" is
-the kind of hypothesis a reader assumes is hiding something.
+is a proper colouring. Worth a sentence, because "we assume a non-empty palette" is the kind of
+hypothesis a reader assumes is hiding something.
 
 ## 2. What is actually proved
 
@@ -165,7 +193,9 @@ Keep this short. The widgets make the artifact evaluable; they are not a contrib
 
 State these plainly rather than letting a referee find them:
 
-* no performance claim — see §5;
+* no performance claim — see §5. DSATUR is better and faster on every instance in the corpus;
+* no algorithmic novelty. Hopfield colouring is Dahl 1987 / Takefuji–Lee 1991; the encoding is
+  Lucas §6.1 in equality form. What is new is that all of it is proved;
 * the search is a heuristic. Nothing proves it *finds* a zero when one exists; the proved content
   is that its positive answers are correct and (with completeness) that its objective has a zero
   exactly when the graph is colourable;
@@ -196,10 +226,12 @@ All page/volume details below were checked against sources, not recalled.
 * J. Mycielski, *Sur le coloriage des graphes*, Colloq. Math. **3** (1955), pp. 161–162. The
   construction behind the two hardest corpus instances.
 
-Dahl and Takefuji–Lee are the papers this one has to distinguish itself from: both colour graphs
-with a Hopfield network, three decades earlier. The distinction is not the method, it is that
-here the encoding is proved faithful in both directions and the solver is proved to be
-minimising the objective that encoding defines.
+Dahl and Takefuji–Lee are prior art for the *method* — both colour graphs with a Hopfield
+network, three decades earlier — and the paper should say so in its first paragraph rather than
+bury it. Neither is a competitor, because neither is making the claim this paper makes: that a
+machine-checked formalisation of the machinery can be instantiated at a new problem and yield a
+solver correct in both directions. Cite them as the reason the *algorithmic* contribution is nil,
+and move on.
 
 ## 9. Open items before submission
 

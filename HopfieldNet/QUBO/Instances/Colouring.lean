@@ -29,7 +29,7 @@ Lucas writes
 
     H = A · Σ_v (1 − Σ_i x_{v,i})² + B · Σ_{(uv) ∈ E} Σ_i x_{u,i} x_{v,i}.
 
-This is *equivalent to*, but not *identical to*, what is built here, in three respects.
+This is *equivalent to*, but not *identical to*, what is built here, in two respects.
 
 1. **The edge term is not a squared residual.** `x_{u,i} x_{v,i}` is a bare product, so the second
    sum is not of the form `‖Ax − b‖²` and does not fit `Problem` at all. It is converted by
@@ -44,8 +44,6 @@ This is *equivalent to*, but not *identical to*, what is built here, in three re
    determined, and conversely.
 2. **There are no coefficients `A`, `B`.** The canonical form carries a single global weight, and
    both families of constraints are hard, so `A = B = 1`.
-3. **Every constraint is written twice.** See the parity discussion below. This multiplies the
-   objective by `2`; its zero set is unchanged.
 
 ## Index layout
 
@@ -56,32 +54,36 @@ Write `N = nverts`, `n = ncolours`, `E = |edges|`. Variables (`nvars = n·N + n�
 | `v < N`, `i < n`   | `colVar v i`| `n·v + i`              |
 | `e < E`, `i < n`   | `slackVar`  | `n·N + n·e + i`        |
 
-Base constraints (`nbase = N + n·E`), each with `b̂ = 1`:
+Constraints (`nrows = nbase = N + n·E`), each written **once**, each with `b̂ = 1`:
 
 | range              | name         | index            | equation                              |
 | ------------------ | ------------ | ---------------- | ------------------------------------- |
 | `v < N`            | vertex row   | `v`              | `Σ_i x_{v,i} = 1`                     |
 | `e < E`, `i < n`   | `edgeRow e i`| `N + n·e + i`    | `x_{u,i} + x_{v,i} + s_{e,i} = 1`     |
 
-and the real row set is *two* copies of that: row `r` and row `r + nbase` carry the same
-equation, so `nrows = 2·nbase`.
+## Why the rows are *not* doubled
 
-## Why the rows are doubled
+`Wf.theta_eq` reads
 
-`Wf.theta_eq` reads `2 θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r`, i.e. `θ̂_u = ½deg(u) − Σ_{r ∋ u} b̂_r`
-with `θ̂_u : ℤ`. With `b̂` integral this forces **every column degree to be even** — the `x² = x`
-fold that produces `θ̂` divides the diagonal `deg(u)` by two. In the single-copy encoding a
-colour variable `(v,i)` has degree `1 + deg_G(v)` and a slack has degree `1`, both odd for most
-graphs, so the single-copy encoding is not a `Problem` at all.
+    θ (as stored) = deg(u) − 2 Σ_{r ∋ u} b̂_r,
 
-Doubling is the minimal repair. A colour variable's degree is
-`(#vertex rows for v) + (#edge rows per incident edge)·deg_G(v)`; for this to be even for every
-graph the second factor must be even (else the parity tracks `deg_G(v)`, which varies) and then
-the first must be even too. Two copies of each row realise both bounds, and the slacks then have
-degree `2`. The objective becomes `2‖Âx̂ − b̂‖²` for the single-copy `Â`, with the same zero set.
+i.e. `Problem.theta` holds `2 θ̂_u`, not `θ̂_u`. The mathematical threshold
+`θ̂_u = ½deg(u) − Σ_{r ∋ u} b̂_r` is a half-integer whenever `deg(u)` is odd, and an earlier
+version of this file stored `θ̂` itself; the only way to stay in `ℤ` was then to force every
+column degree even, which was done by writing every constraint *twice* (row `r` and row
+`r + nbase` carrying the same equation, `nrows = 2·nbase`). With `theta` stored doubled there is
+no parity condition left, so the duplication has been removed: it doubled `nrows`, the objective
+value and the work per sweep, and bought nothing. `QUBO.Problem.toyOdd` is a minimal instance of
+odd degree.
 
-Note how far the incidence is from regular: colour variables have degree `2(1 + deg_G(v))`,
-which varies with `v`, and slacks have degree `2`. The degree-free statement of `Wf.theta_eq` is
+Here every `b̂_r = 1`, so `Σ_{r ∋ u} b̂_r = deg(u)` and the stored threshold is simply
+
+    theta u = deg(u) − 2·deg(u) = −deg(u) = −|rowList u|,
+
+an integer whatever the parity, and `constDoubled = Σ_r b̂_r² = nrows = nbase`.
+
+Note how far the incidence is from regular: a colour variable `(v,i)` has degree `1 + deg_G(v)`,
+which varies with `v`, and a slack has degree `1`. The degree-free statement of `Wf.theta_eq` is
 what makes this expressible; see `QUBO.Incidence`.
 -/
 
@@ -117,11 +119,11 @@ def ncolVars : Nat := I.ncolours * I.nverts
 /-- `n·N + n·E`: one variable per (vertex, colour) and one per (edge, colour). -/
 def nvars : Nat := I.ncolours * I.nverts + I.ncolours * I.nedges
 
-/-- `N + n·E`: the base constraints, before the rows are doubled. -/
+/-- `N + n·E`: one vertex row per vertex and one edge row per (edge, colour). -/
 def nbase : Nat := I.nverts + I.ncolours * I.nedges
 
-/-- Twice `nbase`: every constraint is written twice. -/
-def nrows : Nat := 2 * I.nbase
+/-- The number of rows. Every constraint is written once, so this is `nbase`. -/
+def nrows : Nat := I.nbase
 
 /-- The variable "vertex `v` takes colour `i`". -/
 def colVar (v i : Nat) : Nat := I.ncolours * v + i
@@ -129,7 +131,7 @@ def colVar (v i : Nat) : Nat := I.ncolours * v + i
 /-- The slack of edge `e` at colour `i`. -/
 def slackVar (e i : Nat) : Nat := I.ncolVars + I.ncolours * e + i
 
-/-- The base row `x_{u,i} + x_{v,i} + s_{e,i} = 1` for `e = (u,v)`. -/
+/-- The row `x_{u,i} + x_{v,i} + s_{e,i} = 1` for `e = (u,v)`. -/
 def edgeRow (e i : Nat) : Nat := I.nverts + I.ncolours * e + i
 
 /-! ## Arithmetic of the layout -/
@@ -167,13 +169,12 @@ theorem edgeRow_lt {e i : Nat} (he : e < I.nedges) (hi : i < I.ncolours) :
 
 /-! ## The incidence
 
-`baseInRow u r` decides membership of column `u` in base row `r`; the doubled row set is then
-`baseRowList` together with its translate by `nbase`. Both are built with `List.filter` over an
-index range, never with a scatter loop: `nodup` is then inherited from `List.nodup_range` and
-membership is `List.mem_filter`, whereas a `set!` loop could only be characterised by induction
-on its trip count. -/
+`baseInRow u r` decides membership of column `u` in row `r`, and the row set of a column is the
+`List.filter` of that predicate over the index range — never a scatter loop: `nodup` is then
+inherited from `List.nodup_range` and membership is `List.mem_filter`, whereas a `set!` loop
+could only be characterised by induction on its trip count. -/
 
-/-- **The base incidence.** For a colour variable `u = n·v + i`: the vertex row `v`, and the edge
+/-- **The incidence.** For a colour variable `u = n·v + i`: the vertex row `v`, and the edge
 row of every (incident edge, `i`). For a slack `u = n·N + n·e + i`: the single edge row
 `N + n·e + i`. -/
 def baseInRow (u r : Nat) : Bool :=
@@ -188,14 +189,12 @@ def baseInRow (u r : Nat) : Bool :=
   else
     r + I.ncolVars == u + I.nverts
 
-/-- The base rows of column `u`, as a duplicate-free increasing list. -/
+/-- The rows of column `u`, as a duplicate-free increasing list. -/
 def baseRowList (u : Nat) : List Nat :=
   (List.range I.nbase).filter (fun r => I.baseInRow u r)
 
-/-- The rows of column `u`: the base rows and their translates, since every constraint is
-written twice. -/
-def rowList (u : Nat) : List Nat :=
-  I.baseRowList u ++ (I.baseRowList u).map (· + I.nbase)
+/-- The rows of column `u`. Every constraint is written once, so this is `baseRowList`. -/
+def rowList (u : Nat) : List Nat := I.baseRowList u
 
 /-- The rows of column `u`, as an array — the `rowsOf` of the `Problem` below. -/
 def rowsOf (u : Nat) : Array Nat := (I.rowList u).toArray
@@ -207,39 +206,23 @@ theorem mem_baseRowList {u r : Nat} :
 theorem baseRowList_nodup (u : Nat) : (I.baseRowList u).Nodup :=
   List.Nodup.filter _ (List.nodup_range)
 
-theorem rowList_nodup (u : Nat) : (I.rowList u).Nodup := by
-  refine List.Nodup.append (I.baseRowList_nodup u)
-    (List.Nodup.map (fun a b h => by omega) (I.baseRowList_nodup u)) ?_
-  intro a ha hb
-  have h1 : a < I.nbase := ((I.mem_baseRowList).mp ha).1
-  obtain ⟨b, hb', rfl⟩ := List.mem_map.mp hb
-  omega
+theorem rowList_nodup (u : Nat) : (I.rowList u).Nodup := I.baseRowList_nodup u
 
 theorem rowList_lt {u r : Nat} (hr : r ∈ I.rowList u) : r < I.nrows := by
-  rcases List.mem_append.mp hr with h | h
-  · have := ((I.mem_baseRowList).mp h).1
-    simp only [nrows]; omega
-  · obtain ⟨b, hb, rfl⟩ := List.mem_map.mp h
-    have := ((I.mem_baseRowList).mp hb).1
-    simp only [nrows]; omega
+  have := ((I.mem_baseRowList).mp hr).1
+  simp only [nrows]; omega
 
-theorem rowsOf_size (u : Nat) : (I.rowsOf u).size = 2 * (I.baseRowList u).length := by
-  simp only [rowsOf, rowList, List.size_toArray, List.length_append, List.length_map]
-  omega
+theorem rowsOf_size (u : Nat) : (I.rowsOf u).size = (I.baseRowList u).length := by
+  simp only [rowsOf, rowList, List.size_toArray]
 
 theorem mem_rowsOf {u r : Nat} : r ∈ I.rowsOf u ↔ r ∈ I.rowList u := by
   simp [rowsOf]
 
-/-- On a base row, membership in the doubled row set is the base incidence. -/
+/-- Membership in the row set of a column is the incidence. -/
 theorem contains_base {u r : Nat} (hr : r < I.nbase) :
     (I.rowsOf u).contains r = true ↔ I.baseInRow u r = true := by
-  rw [Array.contains_iff_mem, I.mem_rowsOf, rowList, List.mem_append]
-  constructor
-  · rintro (h | h)
-    · exact ((I.mem_baseRowList).mp h).2
-    · obtain ⟨b, hb, rfl⟩ := List.mem_map.mp h
-      omega
-  · intro h; exact Or.inl ((I.mem_baseRowList).mpr ⟨hr, h⟩)
+  rw [Array.contains_iff_mem, I.mem_rowsOf, rowList]
+  exact ⟨fun h => ((I.mem_baseRowList).mp h).2, fun h => (I.mem_baseRowList).mpr ⟨hr, h⟩⟩
 
 /-! ## Reading the incidence -/
 
@@ -269,7 +252,7 @@ theorem baseInRow_edge {a i e : Nat} (hc : 0 < I.ncolours) (ha : a < I.nverts)
   rw [if_pos hlt, if_neg hnot, hsub, I.div_pack hc hi, I.mod_pack hc hi, hp, hdiv, hmod]
   rcases hend with h | h <;> simp [h]
 
-/-- A slack sits in exactly one base row, its own. -/
+/-- A slack sits in exactly one row, its own edge row. -/
 theorem baseInRow_slack {e i : Nat} :
     I.baseInRow (I.slackVar e i) (I.edgeRow e i) = true := by
   have hnot : ¬ (I.slackVar e i < I.ncolVars) := by simp only [slackVar]; omega
@@ -312,7 +295,7 @@ theorem baseInRow_edgeRow {e i u : Nat} (hc : 0 < I.ncolours) (hi : i < I.ncolou
       · exact absurd h1 h
       · simp only [h1, slackVar, edgeRow]; omega
 
-/-- Every base row past the vertex rows is an edge row, with both indices in range. -/
+/-- Every row past the vertex rows is an edge row, with both indices in range. -/
 theorem eq_edgeRow {r : Nat} (h1 : I.nverts ≤ r) (h2 : r < I.nbase) :
     ∃ e i, e < I.nedges ∧ i < I.ncolours ∧ r = I.edgeRow e i := by
   have hc : 0 < I.ncolours := by
@@ -326,25 +309,6 @@ theorem eq_edgeRow {r : Nat} (h1 : I.nverts ≤ r) (h2 : r < I.nbase) :
   simp only [edgeRow]
   omega
 
-/-- Membership in the doubled row set, on the second copy of a base row. -/
-theorem contains_shift {u r : Nat} (hr : r < I.nbase) :
-    (I.rowsOf u).contains (r + I.nbase) = true ↔ I.baseInRow u r = true := by
-  rw [Array.contains_iff_mem, I.mem_rowsOf, rowList, List.mem_append]
-  constructor
-  · rintro (h | h)
-    · have := ((I.mem_baseRowList).mp h).1; omega
-    · obtain ⟨b, hb, hb2⟩ := List.mem_map.mp h
-      have : b = r := by omega
-      subst this
-      exact ((I.mem_baseRowList).mp hb).2
-  · intro h
-    exact Or.inr (List.mem_map.mpr ⟨r, (I.mem_baseRowList).mpr ⟨hr, h⟩, rfl⟩)
-
-/-- The two copies of a base row have the same variables. -/
-theorem contains_shift_eq (u : Nat) {r : Nat} (hr : r < I.nbase) :
-    (I.rowsOf u).contains (r + I.nbase) = (I.rowsOf u).contains r :=
-  Bool.eq_iff_iff.mpr ((I.contains_shift hr).trans (I.contains_base hr).symm)
-
 end Instance
 
 /-! ## The QUBO
@@ -354,8 +318,9 @@ projections are then `rfl` and entries are read off by `Array.getElem_map`. -/
 
 open Instance
 
-/-- **The colouring QUBO.** `b̂ ≡ 1`, since every constraint is an "exactly one" equation, and
-therefore `θ̂_u = ½deg(u) − deg(u) = −½deg(u) = −|baseRowList u|`. -/
+/-- **The colouring QUBO.** `b̂ ≡ 1`, since every constraint is an "exactly one" equation, so
+`Σ_{r ∋ u} b̂_r = deg(u)` and the stored (doubled) threshold is
+`2θ̂_u = deg(u) − 2deg(u) = −deg(u) = −|baseRowList u|`. -/
 def problem (I : Instance) : Problem where
   nvars := I.nvars
   nrows := I.nrows
@@ -364,9 +329,9 @@ def problem (I : Instance) : Problem where
   varsOf := (Array.range I.nrows).map fun r =>
     ((List.range I.nvars).filter fun u => (I.rowsOf u).contains r).toArray
   bhat := Array.replicate I.nrows 1
-  -- stored doubled: `2θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r = deg(u) − 2·deg(u)`
-  theta := (Array.range I.nvars).map fun u => -2 * ((I.baseRowList u).length : Int)
-  constDoubled := (I.nrows : Int)
+  -- stored doubled: `2θ̂_u = deg(u) − 2 Σ_{r ∋ u} b̂_r = deg(u) − 2·deg(u) = −deg(u)`
+  theta := (Array.range I.nvars).map fun u => -((I.baseRowList u).length : Int)
+  constDoubled := (I.nbase : Int)
   base := #[]
 
 variable (I : Instance)
@@ -386,8 +351,8 @@ theorem problem_bhat {r : Nat} (hr : r < I.nrows) : (problem I).bhat.getD r 0 = 
   simp
 
 theorem problem_theta {u : Nat} (hu : u < I.nvars) :
-    (problem I).theta.getD u 0 = -2 * ((I.baseRowList u).length : Int) := by
-  show ((Array.range I.nvars).map fun u => -2 * ((I.baseRowList u).length : Int)).getD u 0 = _
+    (problem I).theta.getD u 0 = -((I.baseRowList u).length : Int) := by
+  show ((Array.range I.nvars).map fun u => -((I.baseRowList u).length : Int)).getD u 0 = _
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hu)]
   simp
 
@@ -442,12 +407,11 @@ theorem problem_wf : (problem I).Wf where
     exact I.rowList_lt (I.mem_rowsOf.mp hr)
   theta_eq := fun u hu => by
     rw [problem_theta I hu, sum_bhat_indicator I hu, problem_rowsOf I hu, I.rowsOf_size]
-    push_cast
     ring
   const_eq := by
-    show (I.nrows : Int) = ∑ r ∈ Finset.range I.nrows, (problem I).bhat.getD r 0 ^ 2
+    show (I.nbase : Int) = ∑ r ∈ Finset.range I.nrows, (problem I).bhat.getD r 0 ^ 2
     rw [Finset.sum_congr rfl (fun r hr => by rw [problem_bhat I (by simpa using hr)])]
-    simp
+    simp [Instance.nrows]
 
 /-! ## A zero penalty satisfies every row
 
@@ -555,12 +519,6 @@ theorem decode_size (I : Instance) (x : Array Bool) : (I.decode x).size = I.nver
 
 theorem hitList_nodup (I : Instance) (x : Array Bool) (r : Nat) : (I.hitList x r).Nodup :=
   List.Nodup.filter _ List.nodup_range
-
-/-- The two copies of a base row hold the same set variables. -/
-theorem hitList_shift (I : Instance) (x : Array Bool) {r : Nat} (hr : r < I.nbase) :
-    I.hitList x (r + I.nbase) = I.hitList x r := by
-  unfold hitList
-  exact List.filter_congr fun u _ => by rw [I.contains_shift_eq u hr]
 
 /-! ### Reading the checker -/
 
@@ -726,8 +684,7 @@ takes the only value that can close its row, `s_{e,i} = [col u ≠ i ∧ col v �
   endpoint carries colour `i`, and the slack supplies the missing `1` exactly when neither does.
 
 The work is in "exactly one", i.e. in knowing every variable of a row: that is
-`baseInRow_edgeRow` (the converse of `baseInRow_edge`), and the doubling of the rows is handled
-by `hitList_shift`. -/
+`baseInRow_edgeRow` (the converse of `baseInRow_edge`). -/
 
 namespace Instance
 
@@ -898,22 +855,16 @@ theorem encode_hitList_edge (I : Instance) (hE : I.edgesOk = true) {col : Array 
       · exact absurd hB' hB
       · exact hb'
 
-/-- **Every row of an encoded colouring holds exactly one set variable.** The base rows are the
-two cases above; the second copy of a base row has the same variables. -/
+/-- **Every row of an encoded colouring holds exactly one set variable**: the vertex rows and the
+edge rows are the two cases above. -/
 theorem encode_hitList_length (I : Instance) (hE : I.edgesOk = true) {col : Array Nat}
     (hcol : I.isColouring col = true) {r : Nat} (hr : r < I.nrows) :
     (I.hitList (I.encode col) r).length = 1 := by
-  have key : ∀ s, s < I.nbase → (I.hitList (I.encode col) s).length = 1 := by
-    intro s hs
-    rcases Nat.lt_or_ge s I.nverts with h | h
-    · exact encode_hitList_vertex I hcol h
-    · obtain ⟨e, i, he, hi, rfl⟩ := I.eq_edgeRow h hs
-      exact encode_hitList_edge I hE hcol he hi
-  rcases Nat.lt_or_ge r I.nbase with h | h
-  · exact key r h
-  · have h2 : r - I.nbase < I.nbase := by simp only [Instance.nrows] at hr; omega
-    rw [show r = (r - I.nbase) + I.nbase by omega, I.hitList_shift _ h2]
-    exact key _ h2
+  have hr' : r < I.nbase := by simpa only [Instance.nrows] using hr
+  rcases Nat.lt_or_ge r I.nverts with h | h
+  · exact encode_hitList_vertex I hcol h
+  · obtain ⟨e, i, he, hi, rfl⟩ := I.eq_edgeRow h hr'
+    exact encode_hitList_edge I hE hcol he hi
 
 /-- **An encoded colouring meets every row exactly**: `ρ_r = 1 = b̂_r`. -/
 theorem encode_rowSum (I : Instance) (hE : I.edgesOk = true) {col : Array Nat}
@@ -1022,20 +973,21 @@ def triangle2 : Instance := ⟨3, 2, #[(0, 1), (1, 2), (0, 2)]⟩
 /-- `K₄` with three colours — infeasible. -/
 def k4 : Instance := ⟨4, 3, #[(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]⟩
 
--- 18 = 3·3 colour variables + 3·3 slacks, 24 = 2·(3 + 3·3) rows
+-- 18 = 3·3 colour variables + 3·3 slacks, 12 = 3 + 3·3 rows
 #eval (triangle.nvars, triangle.nrows)
--- the two column degrees: 2·(1 + deg_G v) = 6 for a colour variable, 2 for a slack
+-- the two column degrees: 1 + deg_G v = 3 for a colour variable, 1 for a slack
 #eval ((triangle.rowsOf (triangle.colVar 0 0)).size, (triangle.rowsOf (triangle.slackVar 0 0)).size)
 -- a proper 3-colouring of the triangle is a zero of the objective, and decodes back to itself
 #eval (problem triangle).penaltyDoubled (triangle.encode #[0, 1, 2])   -- 0
 #eval triangle.decode (triangle.encode #[0, 1, 2])                      -- #[0, 1, 2]
 -- a monochromatic edge is not
-#eval (problem triangle).penaltyDoubled (triangle.encode #[0, 1, 0])   -- 2
+#eval (problem triangle).penaltyDoubled (triangle.encode #[0, 1, 0])   -- 1
 
-/-- The incidence is *not* regular: a colour variable of the triangle has degree `6`, a slack
-degree `2`. This is what the degree-free `Wf.theta_eq` buys. -/
-example : (triangle.rowsOf (triangle.colVar 0 0)).size = 6
-    ∧ (triangle.rowsOf (triangle.slackVar 0 0)).size = 2 := by decide
+/-- The incidence is *not* regular: a colour variable of the triangle has degree `3`, a slack
+degree `1` — and both are odd, which is exactly what the doubled `theta` field and the
+degree-free `Wf.theta_eq` buy. -/
+example : (triangle.rowsOf (triangle.colVar 0 0)).size = 3
+    ∧ (triangle.rowsOf (triangle.slackVar 0 0)).size = 1 := by decide
 
 /-- `#[0,1,2]` is a proper colouring of the triangle and `#[0,1,0]` is not. -/
 example : triangle.isColouring #[0, 1, 2] = true := by decide

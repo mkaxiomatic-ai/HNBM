@@ -142,7 +142,10 @@ order and DSATUR. `vars` is the QUBO's variable count at that palette.
 | Myc3 | 23 | 71 | 5 | 12 | 5 | 5 | 470 | **0/3** | 36.7 | 3/3 |
 
 A fourth column set, at palette χ−1 where the instance is provably infeasible: the search finds
-no zero on any of the fifteen, terminating with residual penalty 2–12. That column is only
+no zero on any of the fifteen, terminating with a non-zero residual penalty. **The table above
+predates removing the row duplication and must be regenerated** — row counts and penalty values
+both halve; the success/failure pattern is unaffected, since a zero is a zero either way. That
+column is only
 *meaningful* because of `exists_zero_iff_colourable'` — without completeness, "found no zero"
 would say nothing about colourability.
 

@@ -104,6 +104,101 @@ def props (I : Instance) (seed : Nat := 1) (cfg : SearchConfig := {}) : PlayerPr
 /-- The player for one graph, as an infoview `Html`. -/
 def animate (I : Instance) (seed : Nat := 1) : Html := player (props I seed)
 
+/-! ## Watching the machine fire, sweep by sweep
+
+`props` above shows the *swarm*: one frame per outer iteration of `QUBO.search`. On an easy graph
+the search finds a zero in one or two outer iterations, so there is nothing to watch.
+
+`fireProps` shows the *network* instead: one annealed run of the Boltzmann machine of eq. (6),
+one frame per synchronous sweep, temperature falling geometrically. Every neuron is resampled from
+the logistic of its accumulated field each sweep, so early frames flicker and late ones settle —
+which is the thing worth seeing, and what the swarm view hides. -/
+
+/-- One annealed BMm run, keeping every sweep rather than only the endpoint.
+
+Drives `QUBO.bmmStep` directly. Deliberately *not* a variant of `bmmRun`: capture in the hot loop
+would slow every search in the library for the sake of a demo. -/
+def anneal (P : Problem) (steps : Nat) (T0 eta : Float) (g0 : Rng) (x0 : Array Bool) :
+    Array (Array Bool) := Id.run do
+  let mut u : Array Int := Array.replicate P.nvars 0
+  let mut x := x0
+  let mut g := g0
+  let mut T := T0
+  let mut out : Array (Array Bool) := #[x0]
+  for _ in [0:steps] do
+    let (u', x', g') := bmmStep P T g u x
+    u := u'; x := x'; g := g'
+    T := T * eta
+    out := out.push x
+  return out
+
+/-- A one-hot random start: exactly one colour per vertex, so the first frame is a (usually
+improper) total colouring rather than a blank board. -/
+def randomStart (I : Instance) (g0 : Rng) : Array Bool × Rng := Id.run do
+  let mut bs : Array Bool := Array.replicate (problem I).nvars false
+  let mut g := g0
+  for v in [0:I.nverts] do
+    let (k, g') := g.nextBelow I.ncolours
+    g := g'
+    bs := bs.set! (I.colVar v k) true
+  return (bs, g)
+
+/-- Props for the sweep-by-sweep view.
+
+A single annealed run of eq. (6) settles on a proper colouring only sometimes — measured over
+eight seeds: 4/8 on `triangle`, 3/8 on `c5`, 1/8 on `petersen`. That is not a defect of the
+demo, it is the reason Li & Wang's method is *collaborative*: one Boltzmann machine is a weak
+solver, and the swarm of eq. (7) is what makes it reliable. `#colour` shows the swarm.
+
+So that the animation shows a run that finishes, this tries seeds `seed, seed+1, …` and animates
+the first that settles, reporting in the caption which seed that was and how many were tried.
+The failing runs are not hidden — `#fire` with an explicit `tries := 1` shows exactly one.
+
+One measurement worth keeping, because it is the argument for the swarm in miniature: on `wheel6`
+and `crown4` a single anneal needs about forty restarts to hit a proper colouring, and making the
+schedule *longer* instead does not help at all — 250 or 400 sweeps at slower cooling still stall
+at `p(x̂) = 2`, while 40 restarts of the 120-sweep schedule succeed. The failure is not
+impatience, it is that each run has a roughly fixed success probability; restarts beat patience,
+which is exactly why eq. (7) runs a population rather than one long chain. -/
+def fireProps (I : Instance) (seed : Nat := 1) (steps : Nat := 120)
+    (T0 : Float := 2.0) (eta : Float := 0.97) (tries : Nat := 40) : PlayerProps :=
+  let P := problem I
+  let attempt (s : Nat) : Array (Array Bool) :=
+    let (x0, g) := randomStart I (Rng.seed s.toUInt64)
+    anneal P steps T0 eta g x0
+  let pick : Nat × Array (Array Bool) := Id.run do
+    let mut chosen := (seed, attempt seed)
+    for k in [0:tries] do
+      let s := seed + k
+      let xs := attempt s
+      if I.isColouring (I.decode xs.back!) then
+        chosen := (s, xs)
+        break
+    return chosen
+  let (usedSeed, xs) := pick
+  let frames := xs.map (frameOf I)
+  let pens := xs.map P.penaltyDoubled
+  let ok := I.isColouring (I.decode xs.back!)
+  { title := s!"{I.nverts} vertices, {I.nedges} edges, {I.ncolours} colours — BMm, {steps} sweeps"
+    kind := "graph"
+    frames := frames
+    phase := frames.map fun _ => 1
+    pen := pens
+    outer := (Array.range frames.size).map (fun k : Nat => (k : Int))
+    solved := ok
+    note :=
+      s!"One annealed run of eq. (6), seed {usedSeed} of {tries} tried: T = {T0}·{eta}^t, every " ++
+      s!"neuron resampled from the logistic of its accumulated field each sweep. Final p(x̂) = " ++
+      s!"{pens.back!}" ++
+      (if ok then ", a proper colouring. Press play: early sweeps flicker, late ones settle."
+       else s!" — no seed settled. A single machine is a weak solver; `#colour` runs the swarm.")
+    nverts := I.nverts
+    edges := I.edges
+    ncolours := I.ncolours }
+
+/-- The sweep-by-sweep player. -/
+def fire (I : Instance) (seed : Nat := 1) : Html := player (fireProps I seed)
+
 end Colouring
 end QUBO
 
@@ -127,9 +222,15 @@ private def Lean.Syntax.mkInfoCanonical' : Syntax → Syntax
 private def Lean.TSyntax.mkInfoCanonical' : TSyntax k → TSyntax k :=
   (.mk ·.raw.mkInfoCanonical')
 
-/-- `#colour triangle` — run the neurodynamics on a graph-colouring QUBO and watch it. -/
+/-- `#colour triangle` — run the full search and watch the incumbent, one frame per outer
+iteration. -/
 macro "#colour " g:term : command =>
   Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.animate $g)
+
+/-- `#fire petersen` — watch the Boltzmann machine anneal, one frame per sweep. This is the one
+to press play on. -/
+macro "#fire " g:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.fire $g)
 
 /-! ## Exact cover
 

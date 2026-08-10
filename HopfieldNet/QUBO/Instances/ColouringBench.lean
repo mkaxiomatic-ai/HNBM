@@ -408,7 +408,7 @@ against `χ = 2`. `Crown6` is the honest headline: `crown6_two_colour_zero` agai
 crown graph is exactly the input first-fit is known to fail on, and DSATUR gets it right for free.
 
 **Where it loses.** On `Myc3` (`M(Grötzsch)`, 23 vertices, `χ = 5`) the search does not solve the
-decision problem at the chromatic number on any seed; it stalls at `penaltyDoubled = 2`, one
+decision problem at the chromatic number on any seed; it stalls at `penaltyDoubled = 1`, one
 constraint row short. It needs a sixth colour to succeed. Both baselines use five —
 `myc3_baselines_five`, and `myc3_greedy_five` certifies first-fit's five-colouring against the
 kernel, which by `myc3_five_colour_zero` means the very QUBO the search failed on has a zero. So

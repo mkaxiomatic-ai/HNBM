@@ -177,26 +177,35 @@ State these plainly rather than letting a referee find them:
 
 ## 8. Related work
 
-* A. Lucas, *Ising formulations of many NP problems*, Frontiers in Physics **2**:5 (2014),
-  arXiv:1302.5843. §6.1 is the colouring Hamiltonian; §4.1 exact cover. Verified against the
-  published text.
+All page/volume details below were checked against sources, not recalled.
+
+* A. Lucas, *Ising formulations of many NP problems*, **Frontiers in Physics 2**:5 (2014);
+  arXiv:1302.5843. §6.1 is the colouring Hamiltonian, §4.1 exact cover. Read directly.
+* E. D. Dahl, *Neural network algorithm for an NP-complete problem: map and graph coloring*,
+  Proc. IEEE First International Conference on Neural Networks, Vol. III, San Diego, June 1987,
+  pp. 113–120.
 * Y. Takefuji, K.-C. Lee, *Artificial neural networks for four-coloring map problems and
-  K-colorability problems*, IEEE TCAS **38** (1991). The direct ancestor. **TODO** verify volume
-  and pages against the original.
-* J. Dahl, *Neural network algorithm for an NP-complete problem: map and graph coloring*, IEEE
-  ICNN (1987). **TODO** verify.
-* D. Brélaz, *New methods to color the vertices of a graph*, CACM **22** (1979). DSATUR, the
-  baseline.
-* R. Karp, *Reducibility among combinatorial problems* (1972). Chromatic number is NP-complete.
-* Li & Wang, *Collaborative Neurodynamic Algorithms for Solving Sudoku Puzzles*, ICIST (2022).
-  The solver, and the source of the shared library.
+  K-colorability problems*, **IEEE Trans. Circuits and Systems 38**(3) (1991), pp. 326–333;
+  doi:10.1109/31.101328.
+* D. Brélaz, *New methods to color the vertices of a graph*, **CACM 22**(4) (April 1979),
+  pp. 251–256; doi:10.1145/359094.359101. DSATUR, the baseline.
+* R. M. Karp, *Reducibility among combinatorial problems*, in *Complexity of Computer
+  Computations* (1972), pp. 85–103. Chromatic number is NP-complete.
+* Y. Li, J. Wang, *Collaborative Neurodynamic Algorithms for Solving Sudoku Puzzles*, ICIST
+  (2022). The solver, and the origin of the shared library.
+* J. Mycielski, *Sur le coloriage des graphes*, Colloq. Math. **3** (1955), pp. 161–162. The
+  construction behind the two hardest corpus instances.
+
+Dahl and Takefuji–Lee are the papers this one has to distinguish itself from: both colour graphs
+with a Hopfield network, three decades earlier. The distinction is not the method, it is that
+here the encoding is proved faithful in both directions and the solver is proved to be
+minimising the objective that encoding defines.
 
 ## 9. Open items before submission
 
 1. Remove the row duplication — §3. The reported `vars` counts are 2× the natural ones.
-2. Verify the two 1980s–90s citations against the originals. Both were recalled, not read; the
-   same goes for Brélaz's issue and page numbers.
-3. Consider whether Myc3's failure at χ deserves more than three seeds before it goes in a table.
+2. Regenerate the results table once the row duplication is gone — row counts and penalty values
+   both halve — and give Myc3 more than three seeds while doing it.
 5. Decide the fate of the Sudoku reproducibility material. It is the strongest self-contained
    story in the repository (the paper states no `W`, no `θ` and no hyperparameter; two recovered
    constants decide success; Table I is now a theorem; proving it caught real specification bugs)

@@ -22,9 +22,15 @@ proper colouring  ⟷  p(x) = 0  ⟷  minimiser of the HNBM energy  ←  what th
       ↑ §3                ↑ §4                    ↑ §4
 ```
 
-The left equivalence makes the encoding faithful. The right one makes the network's energy *be*
-the objective. The last arrow makes the theorems statements about the running program rather than
+The left equivalence makes the encoding faithful; the right one makes the network's energy *be*
+the objective; the last arrow makes the theorems statements about the running program rather than
 about an idealisation of it.
+
+The left equivalence is `exists_zero_iff_colourable'`, and it carries **no** side condition —
+not even a non-empty palette. The degenerate case is discharged rather than excluded: an empty
+palette admits no vertex row, forcing `nverts = 0`, and `edgesOk` then forces no edges, so `#[]`
+is a proper colouring. Worth a sentence in the paper, because "we assume a non-empty palette" is
+the kind of hypothesis a reader assumes is hiding something.
 
 ## 2. What is actually proved
 
@@ -33,9 +39,10 @@ about an idealisation of it.
 | The encoding is a well-formed 0/1 QUBO | `Colouring.problem_wf` | ✓ |
 | …and refines the colouring incidence | `Colouring.problem_refines` | ✓ |
 | Soundness: `p(x) = 0` → the decoded colouring is proper | `Colouring.decode_isColouring` | ✓ |
-| Completeness: a proper colouring encodes to `p = 0` | `Colouring.encode_penalty_zero` | ⧗ |
-| Decision equivalence: `∃` zero ↔ `∃` proper colouring | `Colouring.exists_zero_iff_colourable` | ⧗ |
-| K₄ is not 3-colourable (about the *graph*, not the QUBO) | `Colouring.k4_not_three_colourable` | ⧗ |
+| Completeness: a proper colouring encodes to `p = 0` | `Colouring.encode_penalty_zero` | ✓ |
+| Decision equivalence: `∃` zero ↔ `∃` proper colouring | `Colouring.exists_zero_iff_colourable'` | ✓ |
+| K₄ is not 3-colourable (about the *graph*, not the QUBO) | `Colouring.k4_not_three_colourable` | ✓ |
+| Same for exact cover: completeness, the iff, `ex2_no_cover` | `ExactCover.encode_penalty_zero`, `exists_zero_iff_coverable` | ✓ |
 | The QUBO **is** an HNBM Boltzmann energy | `QUBO.Problem.zeroOneHamiltonian_eq` | ✓ |
 | The running inner loop computes that network's local field | `QUBO.Problem.netVec_eq_localField` | ✓ |
 | Global minimisers are exactly the feasible assignments | `QUBO.Problem.energy_eq_min_iff` | ✓ |
@@ -146,10 +153,9 @@ State these plainly rather than letting a referee find them:
 
 ## 9. Open items before submission
 
-1. **Completeness** — §2, in progress. Without it the paper cannot claim a decision procedure.
-2. Results table — §5, in progress.
-3. Remove the row duplication — §3.
-4. Verify the two 1980s–90s citations against the originals.
+1. Results table — §5, in progress. The only empty section.
+2. Remove the row duplication — §3.
+3. Verify the two 1980s–90s citations against the originals. Both were recalled, not read.
 5. Decide the fate of the Sudoku reproducibility material. It is the strongest self-contained
    story in the repository (the paper states no `W`, no `θ` and no hyperparameter; two recovered
    constants decide success; Table I is now a theorem; proving it caught real specification bugs)

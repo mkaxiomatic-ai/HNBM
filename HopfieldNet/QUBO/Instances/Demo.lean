@@ -3,6 +3,7 @@ Copyright (c) 2026 Michail Karatarakis. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import HopfieldNet.QUBO.Instances.Colouring
+import HopfieldNet.QUBO.Instances.ExactCover
 import HopfieldNet.QUBO.Search
 import HopfieldNet.QUBO.Widget
 
@@ -18,6 +19,10 @@ import HopfieldNet.QUBO.Instances.Demo
 #colour triangle       -- K₃ with 3 colours: feasible
 #colour petersen       -- the Petersen graph with 3 colours
 #colour k4             -- K₄ with 3 colours: infeasible, watch it fail to settle
+
+#cover ex1             -- exact cover, drawn as its incidence matrix
+#cover pentomino       -- a small tiling instance
+#cover ex2             -- infeasible: no subfamily covers `{0,1,2}` exactly once
 ```
 
 Nothing about this is Sudoku. The search (`QUBO.search`), the dynamics of eqs (3) and (6), and
@@ -121,3 +126,67 @@ private def Lean.TSyntax.mkInfoCanonical' : TSyntax k → TSyntax k :=
 /-- `#colour triangle` — run the neurodynamics on a graph-colouring QUBO and watch it. -/
 macro "#colour " g:term : command =>
   Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.animate $g)
+
+/-! ## Exact cover
+
+Drawn as the incidence matrix — one row per ground-set element, one column per subset, a mark
+where the element lies in the subset. The margin gives each row's coverage: `1` satisfied, `0`
+uncovered, `2+` over-covered. That number *is* the residual `ρ_r − b̂_r` the objective squares,
+so the picture is of the constraint rather than of a paraphrase of it.
+
+The displayed matrix is the instance's own `m × k` incidence, not the QUBO's `2m` rows —
+`ExactCover.qubo` duplicates every row so that column degrees are even, which is an artefact of
+the encoding and not something worth drawing. (Since `QUBO.Problem.theta` is stored doubled that
+duplication is no longer necessary; removing it is a separate change.)
+-/
+
+namespace QUBO
+namespace ExactCover
+
+open Lean ProofWidgets
+
+/-- Knuth's small example: cover `{0,…,5}` with the rows of the standard 6×7 matrix. -/
+def knuth : Instance := ⟨6, #[#[0, 3], #[0, 2, 5], #[1, 4], #[2, 5], #[1, 3, 4], #[1]]⟩
+
+/-- Tile a 2×3 board with dominoes: six cells, the seven placements. Two exact covers. -/
+def pentomino : Instance :=
+  ⟨6, #[#[0, 1], #[1, 2], #[3, 4], #[4, 5], #[0, 3], #[1, 4], #[2, 5]]⟩
+
+/-- The `(row, column)` pairs of the displayed incidence matrix. -/
+def matCells (I : Instance) : Array (Nat × Nat) :=
+  (Array.range I.numSets).flatMap fun i => (I.setOf i).map fun a => (a, i)
+
+/-- Run the search and package it for the player. -/
+def props (I : Instance) (seed : Nat := 1) (cfg : SearchConfig := {}) : PlayerProps :=
+  let cfg := { cfg with captureBoards := true }
+  let r := search (qubo I) Model.bmm cfg (Rng.seed seed.toUInt64)
+  let frames := r.boards.map (selectionFrame I.numSets)
+  let ok := coversExactly I (decode I r.best)
+  { title := s!"{I.groundSize} elements, {I.numSets} subsets"
+    kind := "matrix"
+    frames := if frames.isEmpty then #[selectionFrame I.numSets r.best] else frames
+    phase := frames.map fun _ => 1
+    pen := r.boardsE
+    outer := (Array.range frames.size).map (fun k : Nat => (k : Int))
+    solved := ok
+    note :=
+      if ok then
+        s!"p(x̂) = 0 after {r.outer} outer iterations; the selection {decode I r.best} was " ++
+        s!"checked to cover every element exactly once — `decode_coversExactly` says the " ++
+        s!"check cannot fail."
+      else
+        s!"no zero found in {r.outer} outer iterations; best p(x̂) = {r.penaltyDoubled}. " ++
+        s!"For an instance with no exact cover that is the expected outcome."
+    mrows := I.groundSize
+    mcols := I.numSets
+    cells := matCells I }
+
+/-- The player for one instance, as an infoview `Html`. -/
+def animate (I : Instance) (seed : Nat := 1) : Html := player (props I seed)
+
+end ExactCover
+end QUBO
+
+/-- `#cover ex1` — run the neurodynamics on an exact-cover QUBO and watch the matrix. -/
+macro "#cover " i:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.ExactCover.animate $i)

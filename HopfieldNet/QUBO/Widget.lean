@@ -15,6 +15,8 @@ frame is drawn:
 * `"sudoku"` — an 81-character board, `'.'` for an empty cell (`CNS.Grid.toString`);
 * `"graph"`  — one character per vertex, `'.'` for uncoloured and otherwise a colour index in
   base 36, drawn on a circular layout with monochromatic edges highlighted.
+* `"matrix"` — one character per column, `'1'` if that column is selected, drawn as the
+  incidence matrix with each row's coverage in the margin.
 
 Frames are computed during elaboration and shipped as props; nothing streams. That is
 deliberate — the search has already finished by the time anything renders — but it does mean a
@@ -58,6 +60,12 @@ structure PlayerProps where
   edges : Array (Nat × Nat) := #[]
   /-- `kind = "graph"`: size of the palette. -/
   ncolours : Nat := 0
+  /-- `kind = "matrix"`: number of displayed constraint rows. -/
+  mrows : Nat := 0
+  /-- `kind = "matrix"`: number of displayed columns. -/
+  mcols : Nat := 0
+  /-- `kind = "matrix"`: the `(row, column)` pairs where the incidence matrix is `1`. -/
+  cells : Array (Nat × Nat) := #[]
   deriving ToJson, FromJson, Inhabited
 
 @[widget_module]
@@ -75,6 +83,10 @@ def colourChar : Option Nat → Char
     if k < 10 then Char.ofNat ('0'.toNat + k)
     else if k < 36 then Char.ofNat ('a'.toNat + (k - 10))
     else '?'
+
+/-- A subset of the columns as one frame string, for the `"matrix"` renderer. -/
+def selectionFrame (n : Nat) (x : Array Bool) : String :=
+  String.mk ((List.range n).map fun i => if x.getD i false then '1' else '0')
 
 /-- A vertex colouring as one frame string. -/
 def colouringFrame (cols : Array (Option Nat)) : String :=

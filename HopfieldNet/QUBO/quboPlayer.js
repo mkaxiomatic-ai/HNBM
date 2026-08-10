@@ -325,12 +325,93 @@ function graphConflicts(frame, edges) {
   return bad
 }
 
+
+/* --------------------------------------------------------------- matrix view
+
+The incidence matrix of an exact-cover instance: one row per ground-set element, one
+column per subset, a mark where the element is in the subset. A frame is one character
+per column, '1' if that subset is selected. The margin shows each row's coverage —
+`1` satisfied, `0` uncovered, `2+` over-covered — which is exactly the residual the
+objective is squaring, so the picture is of the constraint, not of a paraphrase. */
+
+const MC = 22
+const MPAD = 30
+
+function Matrix({ frame, mrows, mcols, cells }) {
+  const inCell = new Set(cells.map(([r, c]) => r * mcols + c))
+  const cover = []
+  for (let r = 0; r < mrows; r++) {
+    let k = 0
+    for (let c = 0; c < mcols; c++) if (frame[c] === '1' && inCell.has(r * mcols + c)) k++
+    cover.push(k)
+  }
+  const els = []
+  for (let c = 0; c < mcols; c++) {
+    if (frame[c] !== '1') continue
+    els.push(h('rect', {
+      key: 'sel' + c, x: MPAD + c * MC, y: 0, width: MC, height: mrows * MC,
+      fill: 'var(--alg2)', opacity: 0.16,
+    }))
+  }
+  for (let r = 0; r < mrows; r++) {
+    for (let c = 0; c < mcols; c++) {
+      if (!inCell.has(r * mcols + c)) continue
+      const on = frame[c] === '1'
+      els.push(h('circle', {
+        key: 'm' + r + '_' + c,
+        cx: MPAD + c * MC + MC / 2, cy: r * MC + MC / 2, r: on ? 6 : 3.5,
+        fill: on ? 'var(--alg2)' : 'var(--text-muted)',
+        opacity: on ? 1 : 0.5,
+      }))
+    }
+  }
+  for (let r = 0; r < mrows; r++) {
+    els.push(h('text', {
+      key: 'rl' + r, x: MPAD - 8, y: r * MC + MC / 2 + 4,
+      textAnchor: 'end', fontSize: '11px', fill: 'var(--text-muted)',
+    }, String(r)))
+    const k = cover[r]
+    els.push(h('text', {
+      key: 'cv' + r, x: MPAD + mcols * MC + 10, y: r * MC + MC / 2 + 4,
+      fontSize: '11px', fontWeight: k === 1 ? 400 : 700,
+      fill: k === 1 ? 'var(--good)' : 'var(--bad)',
+    }, String(k)))
+  }
+  for (let c = 0; c < mcols; c++) {
+    els.push(h('text', {
+      key: 'cl' + c, x: MPAD + c * MC + MC / 2, y: mrows * MC + 14,
+      textAnchor: 'middle', fontSize: '11px',
+      fill: frame[c] === '1' ? 'var(--text-primary)' : 'var(--text-muted)',
+      fontWeight: frame[c] === '1' ? 600 : 400,
+    }, 'S' + c))
+  }
+  return h('svg', {
+    width: MPAD + mcols * MC + 26, height: mrows * MC + 20,
+    style: { display: 'block' },
+  }, els)
+}
+
+/** Rows whose coverage is not exactly one. */
+function matrixConflicts(frame, mrows, mcols, cells) {
+  const inCell = new Set(cells.map(([r, c]) => r * mcols + c))
+  const bad = new Set()
+  for (let r = 0; r < mrows; r++) {
+    let k = 0
+    for (let c = 0; c < mcols; c++) if (frame[c] === '1' && inCell.has(r * mcols + c)) k++
+    if (k !== 1) bad.add(r)
+  }
+  return bad
+}
+
 export default function (props) {
   const { title, frames, givens, phase, pen, outer, solved, note } = props
   const kind = props.kind || 'sudoku'
   const nverts = props.nverts || 0
   const edges = props.edges || []
   const ncolours = props.ncolours || 0
+  const mrows = props.mrows || 0
+  const mcols = props.mcols || 0
+  const cells = props.cells || []
   const n = frames.length
   const [i, setI] = React.useState(0)
   const [playing, setPlaying] = React.useState(false)
@@ -350,8 +431,10 @@ export default function (props) {
   const frame = frames[i] || ''
   const ph = phase[i] || 0
   const conflicts = React.useMemo(
-    () => (kind === 'graph' ? graphConflicts(frame, edges) : conflictCells(frame)),
-    [frame, kind, edges])
+    () => kind === 'graph' ? graphConflicts(frame, edges)
+         : kind === 'matrix' ? matrixConflicts(frame, mrows, mcols, cells)
+         : conflictCells(frame),
+    [frame, kind, edges, mrows, mcols, cells])
   const searchStart = React.useMemo(() => {
     const k = phase.indexOf(1)
     return k < 0 ? n : k
@@ -400,7 +483,9 @@ export default function (props) {
     h('div', { className: 'cns-cap' }, caption),
     kind === 'graph'
       ? h(Graph, { frame, nverts, edges, ncolours })
-      : h(Board, { frame, givens, phase: ph, conflicts }),
+      : kind === 'matrix'
+        ? h(Matrix, { frame, mrows, mcols, cells })
+        : h(Board, { frame, givens, phase: ph, conflicts }),
     h('div', { className: 'cns-row' },
       h('button', { onClick: toggle, title: 'play / pause' },
         playing ? '⏸' : (i + 1 >= n ? '↻' : '▶')),
@@ -430,7 +515,9 @@ export default function (props) {
       key('var(--alg1)', 'Algorithm 1'),
       key('var(--alg2)', 'Algorithm 2'),
       conflicts.size > 0
-        ? key(null, kind === 'graph' ? 'monochromatic edge' : 'conflict', { ring: true })
+        ? key(null, kind === 'graph' ? 'monochromatic edge'
+                  : kind === 'matrix' ? 'row not covered exactly once' : 'conflict',
+            { ring: true })
         : null,
     ),
     note ? h('div', {

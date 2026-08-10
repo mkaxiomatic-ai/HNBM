@@ -196,8 +196,25 @@ def fireProps (I : Instance) (seed : Nat := 1) (steps : Nat := 120)
     edges := I.edges
     ncolours := I.ncolours }
 
-/-- The sweep-by-sweep player. -/
+/-- The sweep-by-sweep player, searching for a seed that settles. -/
 def fire (I : Instance) (seed : Nat := 1) : Html := player (fireProps I seed)
+
+/-- For an instance with **no** colouring: a deliberately small budget.
+
+There is no zero to find, so the search runs to its termination criterion whatever the budget —
+with the default `N = 40`, `M = 50` that is by far the most expensive thing in a demo file. The
+point being made is only that it stops without a zero, which a small population shows just as
+well, and `exists_zero_iff_colourable'` is what makes the negative answer meaningful. -/
+def refute (I : Instance) : Html :=
+  player (props I 1 { N := 10, M := 8, maxOuter := 25 })
+
+/-- The sweep-by-sweep player on **one** given seed, no restart search.
+
+`fire` may run up to `tries` anneals, which is fine in a one-off but adds up in a file full of
+widgets — every one of them is elaborated when the file is opened. Where a settling seed is
+already known, pin it with this and the cost is a single run. -/
+def fireAt (I : Instance) (seed : Nat) : Html :=
+  player (fireProps I seed 120 2.0 0.97 1)
 
 end Colouring
 end QUBO
@@ -228,9 +245,18 @@ macro "#colour " g:term : command =>
   Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.animate $g)
 
 /-- `#fire petersen` — watch the Boltzmann machine anneal, one frame per sweep. This is the one
-to press play on. -/
+to press play on. Restarts until a run settles. -/
 macro "#fire " g:term : command =>
   Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.fire $g)
+
+/-- `#fireAt petersen 7` — the same, on exactly that seed and with no restart search. Use it when
+a settling seed is known, to keep a file of widgets cheap to open.
+
+A separate command rather than an optional argument to `#fire`: `from` is a reserved keyword,
+and a bare second term would be swallowed by the first as an application — hence `ident` here
+rather than `term`. -/
+macro "#fireAt " g:ident s:num : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.fireAt $g $s)
 
 /-! ## Exact cover
 
@@ -323,6 +349,10 @@ def animate (I : Problem') (seed : Nat := 1) : Html := player (props I seed)
 
 end EdgeColouring
 end QUBO
+
+/-- `#refute k3two` — an instance with no colouring, on a small budget. -/
+macro "#refute " g:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Colouring.refute $g)
 
 /-- `#edgecolour k3` — edge-colour a graph, shown on its line graph. -/
 macro "#edgecolour " g:term : command =>

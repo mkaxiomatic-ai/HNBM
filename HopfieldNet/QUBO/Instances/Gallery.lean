@@ -12,7 +12,10 @@ line and a player appears; press **▶** to watch.
 
 Two views of the same solver:
 
-* **`#fire g`** — one annealed run of the Boltzmann machine of eq. (6), **one frame per sweep**.
+* **`#fireAt g s`** — one annealed run of the Boltzmann machine of eq. (6), **one frame per
+  sweep**, on seed `s`. The seeds below are pinned to ones that settle, so opening this file costs
+  one anneal per widget; plain `#fire g` restarts until it finds one, which is friendlier
+  interactively but slower in a file this size.
   This is the one to press play on. Every neuron is resampled from the logistic of its
   accumulated field each sweep, with the temperature falling geometrically, so the early frames
   flicker and the late ones settle. Monochromatic edges are drawn thick and red, so you watch
@@ -41,8 +44,12 @@ The palette is an *input*: set `ncolours := 3` to ask "is this 3-colourable?". I
 reports no zero, that is meaningful — `exists_zero_iff_colourable'` proves the objective has a
 zero exactly when a proper colouring exists.
 
-The run happens during **elaboration**, so a large graph will make the editor wait. Everything in
-this file is instant except `myc3`, which is deliberately at the end.
+The run happens during **elaboration**, so every widget in a file is executed when you open it and
+a large graph will make the editor wait. This file is tuned to open in about ten seconds: the
+`#fireAt` seeds are pinned to ones that settle on the first anneal, and the infeasible instances
+use `#refute`, which runs a small population. Plain `#fire g` restarts until it settles and
+`#colour` on an infeasible instance burns its full budget — both are fine one at a time, but a
+file of them is not.
 -/
 
 namespace QUBO
@@ -92,7 +99,11 @@ def grotzsch : Instance :=
 
 These have no colouring at the palette given, and the search correctly fails to find a zero. That
 the failure *means* something is the content of `exists_zero_iff_colourable'`: no zero exists iff
-no proper colouring does. -/
+no proper colouring does.
+
+`#refute` rather than `#colour`, on a small population: with no zero to find the search always
+runs to its termination criterion, and at the default `N = 40`, `M = 50` these three alone cost
+more than the rest of this file put together. -/
 
 /-- A triangle with two colours. Impossible — `triangle_not_two_colourable` is a theorem. -/
 def k3two : Instance := ⟨3, 2, #[(0,1),(1,2),(0,2)]⟩
@@ -127,13 +138,13 @@ open QUBO.Colouring.Gallery
 section Fire
 /-! ### One Boltzmann anneal, one frame per sweep -/
 
-#fire k3
-#fire c4
-#fire c7
-#fire wheel6
-#fire crown4
-#fire petersen
-#fire grotzsch
+#fireAt k3 1
+#fireAt c4 1
+#fireAt c7 1
+#fireAt wheel6 28
+#fireAt crown4 17
+#fireAt petersen 7
+#fireAt grotzsch 10
 
 end Fire
 
@@ -149,9 +160,9 @@ end Swarm
 section Infeasible
 /-! ### No colouring exists — the search correctly finds no zero -/
 
-#colour k3two
-#colour k4three
-#colour c7two
+#refute k3two
+#refute k4three
+#refute c7two
 
 end Infeasible
 

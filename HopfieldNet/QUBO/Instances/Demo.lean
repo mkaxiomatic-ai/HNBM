@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import HopfieldNet.QUBO.Instances.Colouring
 import HopfieldNet.QUBO.Instances.ExactCover
+import HopfieldNet.QUBO.Instances.EdgeColouring
 import HopfieldNet.QUBO.Search
 import HopfieldNet.QUBO.Widget
 
@@ -23,6 +24,9 @@ import HopfieldNet.QUBO.Instances.Demo
 #cover ex1             -- exact cover, drawn as its incidence matrix
 #cover pentomino       -- a small tiling instance
 #cover ex2             -- infeasible: no subfamily covers `{0,1,2}` exactly once
+
+#edgecolour k3         -- edge colouring, shown on the line graph
+#edgecolour path4      -- a path needs only two edge colours
 ```
 
 Nothing about this is Sudoku. The search (`QUBO.search`), the dynamics of eqs (3) and (6), and
@@ -190,3 +194,35 @@ end QUBO
 /-- `#cover ex1` — run the neurodynamics on an exact-cover QUBO and watch the matrix. -/
 macro "#cover " i:term : command =>
   Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.ExactCover.animate $i)
+
+/-! ## Edge colouring
+
+Shown on the **line graph**: one drawn vertex per edge of `G`, adjacent when the edges share an
+endpoint. That is not a compromise, it is the reduction — a proper edge colouring of `G` *is* a
+proper vertex colouring of `L(G)`, definitionally, by `EdgeColouring.isColouring_lineGraph`. So
+the existing graph renderer shows it with nothing added.
+-/
+
+namespace QUBO
+namespace EdgeColouring
+
+open Lean ProofWidgets
+
+/-- Run the search on the line graph and package it for the player. -/
+def props (I : Problem') (seed : Nat := 1) : PlayerProps :=
+  let L := I.lineGraph
+  let p := Colouring.props L seed
+  { p with
+    title := s!"edge colouring: {I.nverts} vertices, {I.nedges} edges, {I.ncolours} colours (drawn as L(G))"
+    note := p.note ++
+      " Vertices of the picture are edges of G; adjacency is sharing an endpoint." }
+
+/-- The player for one edge-colouring instance. -/
+def animate (I : Problem') (seed : Nat := 1) : Html := player (props I seed)
+
+end EdgeColouring
+end QUBO
+
+/-- `#edgecolour k3` — edge-colour a graph, shown on its line graph. -/
+macro "#edgecolour " g:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.EdgeColouring.animate $g)

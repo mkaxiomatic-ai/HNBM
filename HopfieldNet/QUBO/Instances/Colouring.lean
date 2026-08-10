@@ -12,6 +12,17 @@ a graph `G = (V,E)` and a palette of `n` colours, so that a zero of the objectiv
 `n`-colouring of `G`, and proves it: `Problem.Wf` for the instance, and a decoder whose output
 passes a `Bool` colouring checker whenever the penalty vanishes.
 
+Both directions are proved, so the reduction is exact and not merely sound:
+
+* `decode_isColouring` — a zero of the objective decodes to a proper colouring;
+* `encode_penalty_zero` — a proper colouring encodes to a zero of the objective;
+* `exists_zero_iff_colourable` — hence the QUBO has a zero **iff** `G` is `n`-colourable, with
+  `decode_encode` identifying the two directions on the nose.
+
+The point of the second direction is that a *negative* answer now means something: `k4_no_zero`
+says the `K₄` QUBO has no zero, and `k4_not_three_colourable` upgrades that to the graph
+statement `¬ ∃ col, k4.isColouring col`.
+
 ## Relation to Lucas §6.1
 
 Lucas writes
@@ -267,6 +278,73 @@ theorem baseInRow_slack {e i : Nat} :
   simp only [edgeRow, slackVar, beq_iff_eq]
   omega
 
+theorem slackVar_lt_nvars {e i : Nat} (he : e < I.nedges) (hi : i < I.ncolours) :
+    I.slackVar e i < I.nvars := by
+  have := I.pack_lt hi he
+  simp only [slackVar, ncolVars, nvars] at *
+  omega
+
+/-- **The full content of an edge row.** Its variables are the colour variables of the two
+endpoints at colour `i`, and the slack `s_{e,i}` — nothing else. This is the converse of
+`baseInRow_edge` and `baseInRow_slack` together, and it is what completeness needs: to know a
+row is satisfied one must know *every* variable in it. -/
+theorem baseInRow_edgeRow {e i u : Nat} (hc : 0 < I.ncolours) (hi : i < I.ncolours)
+    {p : Nat × Nat} (hp : I.edges[e]? = some p) :
+    I.baseInRow u (I.edgeRow e i) = true ↔
+      ((u < I.ncolVars ∧ u % I.ncolours = i ∧ (p.1 = u / I.ncolours ∨ p.2 = u / I.ncolours))
+        ∨ u = I.slackVar e i) := by
+  have hnot : ¬ (I.edgeRow e i < I.nverts) := by simp only [edgeRow]; omega
+  have hsub : I.edgeRow e i - I.nverts = I.ncolours * e + i := by simp only [edgeRow]; omega
+  unfold baseInRow
+  by_cases h : u < I.ncolVars
+  · rw [if_pos h, if_neg hnot, hsub, I.div_pack hc hi, I.mod_pack hc hi, hp]
+    simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true]
+    constructor
+    · rintro ⟨h1, h2⟩; exact Or.inl ⟨h, h1.symm, h2⟩
+    · rintro (⟨-, h1, h2⟩ | h1)
+      · exact ⟨h1.symm, h2⟩
+      · exact absurd h (by simp only [h1, slackVar]; omega)
+  · rw [if_neg h]
+    simp only [beq_iff_eq]
+    constructor
+    · intro heq; exact Or.inr (by simp only [slackVar, edgeRow] at heq ⊢; omega)
+    · rintro (⟨h1, -, -⟩ | h1)
+      · exact absurd h1 h
+      · simp only [h1, slackVar, edgeRow]; omega
+
+/-- Every base row past the vertex rows is an edge row, with both indices in range. -/
+theorem eq_edgeRow {r : Nat} (h1 : I.nverts ≤ r) (h2 : r < I.nbase) :
+    ∃ e i, e < I.nedges ∧ i < I.ncolours ∧ r = I.edgeRow e i := by
+  have hc : 0 < I.ncolours := by
+    rcases Nat.eq_zero_or_pos I.ncolours with h | h
+    · simp only [nbase, h, Nat.zero_mul] at h2; omega
+    · exact h
+  have hlt : r - I.nverts < I.ncolours * I.nedges := by simp only [nbase] at h2; omega
+  refine ⟨(r - I.nverts) / I.ncolours, (r - I.nverts) % I.ncolours,
+    Nat.div_lt_of_lt_mul hlt, Nat.mod_lt _ hc, ?_⟩
+  have hdm := Nat.div_add_mod (r - I.nverts) I.ncolours
+  simp only [edgeRow]
+  omega
+
+/-- Membership in the doubled row set, on the second copy of a base row. -/
+theorem contains_shift {u r : Nat} (hr : r < I.nbase) :
+    (I.rowsOf u).contains (r + I.nbase) = true ↔ I.baseInRow u r = true := by
+  rw [Array.contains_iff_mem, I.mem_rowsOf, rowList, List.mem_append]
+  constructor
+  · rintro (h | h)
+    · have := ((I.mem_baseRowList).mp h).1; omega
+    · obtain ⟨b, hb, hb2⟩ := List.mem_map.mp h
+      have : b = r := by omega
+      subst this
+      exact ((I.mem_baseRowList).mp hb).2
+  · intro h
+    exact Or.inr (List.mem_map.mpr ⟨r, (I.mem_baseRowList).mpr ⟨hr, h⟩, rfl⟩)
+
+/-- The two copies of a base row have the same variables. -/
+theorem contains_shift_eq (u : Nat) {r : Nat} (hr : r < I.nbase) :
+    (I.rowsOf u).contains (r + I.nbase) = (I.rowsOf u).contains r :=
+  Bool.eq_iff_iff.mpr ((I.contains_shift hr).trans (I.contains_base hr).symm)
+
 end Instance
 
 /-! ## The QUBO
@@ -411,6 +489,24 @@ theorem penalty_zero_row (P : Problem) {x : Array Bool} (h : P.penaltyDoubled x 
   simp only [hd] at hdr
   omega
 
+/-- **The converse: meeting every row exactly makes the objective vanish.**
+
+Each residual is zero, hence so is each square, hence so is the fold. This is the half
+completeness needs; `penalty_zero_row` is the half soundness needs. Also about an arbitrary
+`Problem`. -/
+theorem penalty_zero_of_rowSums (P : Problem) {x : Array Bool}
+    (h : ∀ r < P.nrows, (P.rowSums x).getD r 0 = P.bhat.getD r 0) :
+    P.penaltyDoubled x = 0 := by
+  have hf : ∀ s : Nat, 0 ≤ ((P.rowSums x).getD s 0 - P.bhat.getD s 0)
+      * ((P.rowSums x).getD s 0 - P.bhat.getD s 0) := fun _ => mul_self_nonneg _
+  have hrw : P.penaltyDoubled x = (Array.range P.nrows).foldl
+      (fun a s => a + ((P.rowSums x).getD s 0 - P.bhat.getD s 0)
+        * ((P.rowSums x).getD s 0 - P.bhat.getD s 0)) 0 := rfl
+  rw [hrw, ← Array.foldl_toList, Array.toList_range]
+  refine (foldl_add_eq_zero_iff _ hf _ 0 (le_refl 0)).mpr ⟨rfl, fun r hr => ?_⟩
+  rw [h r (List.mem_range.mp hr)]
+  ring
+
 /-! ## Decoding
 
 `hitsAt x v` lists the colours `v` is assigned by `x`; the vertex row forces the list to be a
@@ -456,6 +552,44 @@ theorem decode_getD (I : Instance) (x : Array Bool) {v : Nat} (hv : v < I.nverts
 
 theorem decode_size (I : Instance) (x : Array Bool) : (I.decode x).size = I.nverts := by
   simp [decode]
+
+theorem hitList_nodup (I : Instance) (x : Array Bool) (r : Nat) : (I.hitList x r).Nodup :=
+  List.Nodup.filter _ List.nodup_range
+
+/-- The two copies of a base row hold the same set variables. -/
+theorem hitList_shift (I : Instance) (x : Array Bool) {r : Nat} (hr : r < I.nbase) :
+    I.hitList x (r + I.nbase) = I.hitList x r := by
+  unfold hitList
+  exact List.filter_congr fun u _ => by rw [I.contains_shift_eq u hr]
+
+/-! ### Reading the checker -/
+
+/-- The size of a checked colouring. -/
+theorem isColouring_size {I : Instance} {col : Array Nat} (h : I.isColouring col = true) :
+    col.size = I.nverts := by
+  simp only [isColouring, Bool.and_eq_true, beq_iff_eq] at h
+  exact h.1.1
+
+/-- A checked colouring gives every vertex a colour from the palette. -/
+theorem isColouring_lt {I : Instance} {col : Array Nat} (h : I.isColouring col = true) {v : Nat}
+    (hv : v < I.nverts) : col.getD v I.ncolours < I.ncolours := by
+  simp only [isColouring, Bool.and_eq_true, List.all_eq_true, List.mem_range,
+    decide_eq_true_eq] at h
+  exact h.1.2 v hv
+
+/-- A checked colouring is proper. -/
+theorem isColouring_edge {I : Instance} {col : Array Nat} (h : I.isColouring col = true)
+    {p : Nat × Nat} (hp : p ∈ I.edges.toList) :
+    col.getD p.1 I.ncolours ≠ col.getD p.2 I.ncolours := by
+  simp only [isColouring, Bool.and_eq_true, List.all_eq_true, bne_iff_ne, ne_eq] at h
+  exact h.2 p hp
+
+/-- A checked instance has both endpoints of every edge in range. -/
+theorem edgesOk_lt {I : Instance} (hE : I.edgesOk = true) {p : Nat × Nat}
+    (hp : p ∈ I.edges.toList) : p.1 < I.nverts ∧ p.2 < I.nverts := by
+  have h := (List.all_eq_true.mp hE) p hp
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact h.1
 
 end Instance
 
@@ -577,16 +711,28 @@ theorem decode_isColouring (I : Instance) (hc : 0 < I.ncolours) (hE : I.edgesOk 
   exact ⟨⟨I.decode_size x, fun v hv => decode_lt I hc hx hv⟩,
     fun p hp => decode_edge I hc hE hx hp⟩
 
-/-! ## Worked examples
+/-! ## Completeness: a colouring *is* a zero
 
-A triangle is 3-colourable but not 2-colourable, and `K₄` is not 3-colourable. The positive
-direction is exhibited by an explicit bit vector; the negative ones are *theorems about the
-QUBO*, obtained from `decode_isColouring`: no bit vector whatever reaches penalty zero. -/
+`decode_isColouring` says a zero of the objective is a colouring. This section proves the
+converse — a colouring encodes to a zero — which is what turns the encoding from a sound
+reduction into a decision procedure: `exists_zero_iff_colourable` below.
+
+The encoder is the obvious one on the colour variables, `x_{v,i} = [col v = i]`, and on a slack
+takes the only value that can close its row, `s_{e,i} = [col u ≠ i ∧ col v ≠ i]`. Row by row:
+
+* the vertex row `Σ_i x_{v,i} = 1` holds because `col v` is one legal colour, so exactly one of
+  the `n` colour variables of `v` is set;
+* the edge row `x_{u,i} + x_{v,i} + s_{e,i} = 1` holds because `col u ≠ col v`, so *at most* one
+  endpoint carries colour `i`, and the slack supplies the missing `1` exactly when neither does.
+
+The work is in "exactly one", i.e. in knowing every variable of a row: that is
+`baseInRow_edgeRow` (the converse of `baseInRow_edge`), and the doubling of the rows is handled
+by `hitList_shift`. -/
 
 namespace Instance
 
-/-- Encode a colouring as a bit vector: colour variables read off `col`, and each slack takes the
-value that closes its edge row. Only used to exhibit examples. -/
+/-- **The encoder.** Colour variables read off `col`; each slack takes the value that closes its
+edge row, i.e. `s_{e,i} = 1` exactly when neither endpoint of `e` has colour `i`. -/
 def encode (I : Instance) (col : Array Nat) : Array Bool :=
   (Array.range I.nvars).map fun u =>
     if u < I.ncolVars then col.getD (u / I.ncolours) I.ncolours == u % I.ncolours
@@ -597,7 +743,275 @@ def encode (I : Instance) (col : Array Nat) : Array Bool :=
           (col.getD p.1 I.ncolours != (u - I.ncolVars) % I.ncolours)
             && (col.getD p.2 I.ncolours != (u - I.ncolVars) % I.ncolours)
 
+theorem encode_getD (I : Instance) (col : Array Nat) {u : Nat} (hu : u < I.nvars) :
+    (I.encode col).getD u false =
+      (if u < I.ncolVars then col.getD (u / I.ncolours) I.ncolours == u % I.ncolours
+       else
+         match I.edges[(u - I.ncolVars) / I.ncolours]? with
+         | none => false
+         | some p =>
+             (col.getD p.1 I.ncolours != (u - I.ncolVars) % I.ncolours)
+               && (col.getD p.2 I.ncolours != (u - I.ncolVars) % I.ncolours)) := by
+  show ((Array.range I.nvars).map _).getD u false = _
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simpa using hu)]
+  simp only [Option.getD_some, Array.getElem_map, Array.getElem_range]
+
+/-- `x_{v,i} = 1` iff `col v = i`. -/
+theorem encode_colVar (I : Instance) (col : Array Nat) {v i : Nat} (hc : 0 < I.ncolours)
+    (hv : v < I.nverts) (hi : i < I.ncolours) :
+    (I.encode col).getD (I.colVar v i) false = (col.getD v I.ncolours == i) := by
+  rw [I.encode_getD col (I.colVar_lt_nvars hv hi), if_pos (I.colVar_lt hv hi)]
+  simp only [colVar]
+  rw [I.div_pack hc hi, I.mod_pack hc hi]
+
+/-- `s_{e,i} = 1` iff neither endpoint of `e` has colour `i`. -/
+theorem encode_slackVar (I : Instance) (col : Array Nat) {e i : Nat} (hc : 0 < I.ncolours)
+    (he : e < I.nedges) (hi : i < I.ncolours) {p : Nat × Nat} (hp : I.edges[e]? = some p) :
+    (I.encode col).getD (I.slackVar e i) false =
+      ((col.getD p.1 I.ncolours != i) && (col.getD p.2 I.ncolours != i)) := by
+  have hnot : ¬ (I.slackVar e i < I.ncolVars) := by simp only [slackVar]; omega
+  have hsub : I.slackVar e i - I.ncolVars = I.ncolours * e + i := by simp only [slackVar]; omega
+  rw [I.encode_getD col (I.slackVar_lt_nvars he hi), if_neg hnot, hsub,
+    I.div_pack hc hi, I.mod_pack hc hi, hp]
+
 end Instance
+
+/-- A duplicate-free list all of whose elements equal one of its members is a singleton. -/
+private theorem length_eq_one_of_all_eq : ∀ (L : List Nat), L.Nodup → ∀ a, a ∈ L →
+    (∀ b ∈ L, b = a) → L.length = 1 := by
+  intro L
+  match L with
+  | [] => intro _ a ha _; exact absurd ha (by simp)
+  | [_] => intro _ _ _ _; rfl
+  | b :: c :: t =>
+    intro hnd a _ hall
+    have hb : b = a := hall b (by simp)
+    have hc : c = a := hall c (by simp)
+    exact absurd (show b ∈ c :: t by rw [hb, ← hc]; exact List.mem_cons_self ..)
+      ((List.nodup_cons.mp hnd).1)
+
+/-- …and it is the singleton on that member. -/
+private theorem eq_singleton_of_all_eq {L : List Nat} (hnd : L.Nodup) {a : Nat} (ha : a ∈ L)
+    (hall : ∀ b ∈ L, b = a) : L = [a] := by
+  obtain ⟨c, hc⟩ := List.length_eq_one_iff.mp (length_eq_one_of_all_eq L hnd a ha hall)
+  rw [hc] at ha ⊢
+  rw [List.mem_singleton] at ha
+  rw [ha]
+
+/-- **The vertex row of an encoded colouring holds exactly one set variable**, namely
+`x_{v, col v}`: the row sees only the colour variables of `v`, and `col v` is the one colour
+`col` gives it. -/
+theorem encode_hitList_vertex (I : Instance) {col : Array Nat} (hcol : I.isColouring col = true)
+    {v : Nat} (hv : v < I.nverts) : (I.hitList (I.encode col) v).length = 1 := by
+  have hcv : col.getD v I.ncolours < I.ncolours := Instance.isColouring_lt hcol hv
+  have hc : 0 < I.ncolours := by omega
+  have hvb : v < I.nbase := by simp only [Instance.nbase]; omega
+  refine length_eq_one_of_all_eq _ (I.hitList_nodup _ v) (I.colVar v (col.getD v I.ncolours))
+    ?_ ?_
+  · refine Instance.mem_hitList.mpr ⟨I.colVar_lt_nvars hv hcv, ?_, ?_⟩
+    · rw [I.encode_colVar col hc hv hcv]; simp
+    · exact (I.contains_base hvb).mpr
+        ((I.baseInRow_vertex hv).mpr ⟨I.colVar_lt hv hcv, I.div_pack hc hcv⟩)
+  · intro b hb
+    obtain ⟨hblt, hbx, hbrow⟩ := Instance.mem_hitList.mp hb
+    obtain ⟨hbcol, hbdiv⟩ := (I.baseInRow_vertex hv).mp ((I.contains_base hvb).mp hbrow)
+    have hmod : b % I.ncolours < I.ncolours := Nat.mod_lt _ hc
+    have hbeq : I.colVar v (b % I.ncolours) = b := by
+      simp only [Instance.colVar, ← hbdiv]
+      exact Nat.div_add_mod b I.ncolours
+    rw [← hbeq, I.encode_colVar col hc hv hmod] at hbx
+    simp only [beq_iff_eq] at hbx
+    rw [← hbeq, hbx]
+
+/-- **The edge row of an encoded colouring holds exactly one set variable.**
+
+`col p.1 ≠ col p.2`, so of the three variables of the row `x_{p.1,i} + x_{p.2,i} + s_{e,i} = 1`
+the first is set iff `col p.1 = i`, the second iff `col p.2 = i` — never both — and the slack iff
+neither. Exactly one of the three cases occurs. -/
+theorem encode_hitList_edge (I : Instance) (hE : I.edgesOk = true) {col : Array Nat}
+    (hcol : I.isColouring col = true) {e i : Nat} (he : e < I.nedges) (hi : i < I.ncolours) :
+    (I.hitList (I.encode col) (I.edgeRow e i)).length = 1 := by
+  have hc : 0 < I.ncolours := by omega
+  have he' : e < I.edges.size := by simpa [Instance.nedges] using he
+  obtain ⟨p, hp, hpmem⟩ : ∃ p, I.edges[e]? = some p ∧ p ∈ I.edges.toList :=
+    ⟨I.edges[e], Array.getElem?_eq_getElem he', Array.mem_toList_iff.mpr (Array.getElem_mem he')⟩
+  obtain ⟨h1, h2⟩ := Instance.edgesOk_lt hE hpmem
+  have hne := Instance.isColouring_edge hcol hpmem
+  have herow : I.edgeRow e i < I.nbase := I.edgeRow_lt he hi
+  have hchar : ∀ b, b ∈ I.hitList (I.encode col) (I.edgeRow e i) ↔
+      ((b = I.colVar p.1 i ∧ col.getD p.1 I.ncolours = i)
+        ∨ (b = I.colVar p.2 i ∧ col.getD p.2 I.ncolours = i)
+        ∨ (b = I.slackVar e i ∧ col.getD p.1 I.ncolours ≠ i
+            ∧ col.getD p.2 I.ncolours ≠ i)) := by
+    intro b
+    rw [Instance.mem_hitList]
+    constructor
+    · rintro ⟨hblt, hbx, hbrow⟩
+      rcases (I.baseInRow_edgeRow hc hi hp).mp ((I.contains_base herow).mp hbrow) with
+        ⟨hbc, hbm, hbd⟩ | hbs
+      · have hbeq : I.colVar (b / I.ncolours) i = b := by
+          simp only [Instance.colVar, ← hbm]
+          exact Nat.div_add_mod b I.ncolours
+        rcases hbd with hd | hd
+        · have hb' : b = I.colVar p.1 i := by rw [hd]; exact hbeq.symm
+          rw [hb', I.encode_colVar col hc h1 hi] at hbx
+          simp only [beq_iff_eq] at hbx
+          exact Or.inl ⟨hb', hbx⟩
+        · have hb' : b = I.colVar p.2 i := by rw [hd]; exact hbeq.symm
+          rw [hb', I.encode_colVar col hc h2 hi] at hbx
+          simp only [beq_iff_eq] at hbx
+          exact Or.inr (Or.inl ⟨hb', hbx⟩)
+      · rw [hbs, I.encode_slackVar col hc he hi hp] at hbx
+        simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at hbx
+        exact Or.inr (Or.inr ⟨hbs, hbx.1, hbx.2⟩)
+    · rintro (⟨rfl, hval⟩ | ⟨rfl, hval⟩ | ⟨rfl, hv1, hv2⟩)
+      · exact ⟨I.colVar_lt_nvars h1 hi, by rw [I.encode_colVar col hc h1 hi, hval]; simp,
+          (I.contains_base herow).mpr (I.baseInRow_edge hc h1 hi hp (Or.inl rfl))⟩
+      · exact ⟨I.colVar_lt_nvars h2 hi, by rw [I.encode_colVar col hc h2 hi, hval]; simp,
+          (I.contains_base herow).mpr (I.baseInRow_edge hc h2 hi hp (Or.inr rfl))⟩
+      · refine ⟨I.slackVar_lt_nvars he hi, ?_,
+          (I.contains_base herow).mpr I.baseInRow_slack⟩
+        rw [I.encode_slackVar col hc he hi hp]
+        simp only [Bool.and_eq_true, bne_iff_ne, ne_eq]
+        exact ⟨hv1, hv2⟩
+  by_cases hA : col.getD p.1 I.ncolours = i
+  · refine length_eq_one_of_all_eq _ (I.hitList_nodup _ _) (I.colVar p.1 i)
+      ((hchar _).mpr (Or.inl ⟨rfl, hA⟩)) ?_
+    intro b hb
+    rcases (hchar b).mp hb with ⟨hb', -⟩ | ⟨-, hB⟩ | ⟨-, hn1, -⟩
+    · exact hb'
+    · exact absurd (hA.trans hB.symm) hne
+    · exact absurd hA hn1
+  · by_cases hB : col.getD p.2 I.ncolours = i
+    · refine length_eq_one_of_all_eq _ (I.hitList_nodup _ _) (I.colVar p.2 i)
+        ((hchar _).mpr (Or.inr (Or.inl ⟨rfl, hB⟩))) ?_
+      intro b hb
+      rcases (hchar b).mp hb with ⟨-, hA'⟩ | ⟨hb', -⟩ | ⟨-, -, hn2⟩
+      · exact absurd hA' hA
+      · exact hb'
+      · exact absurd hB hn2
+    · refine length_eq_one_of_all_eq _ (I.hitList_nodup _ _) (I.slackVar e i)
+        ((hchar _).mpr (Or.inr (Or.inr ⟨rfl, hA, hB⟩))) ?_
+      intro b hb
+      rcases (hchar b).mp hb with ⟨-, hA'⟩ | ⟨-, hB'⟩ | ⟨hb', -, -⟩
+      · exact absurd hA' hA
+      · exact absurd hB' hB
+      · exact hb'
+
+/-- **Every row of an encoded colouring holds exactly one set variable.** The base rows are the
+two cases above; the second copy of a base row has the same variables. -/
+theorem encode_hitList_length (I : Instance) (hE : I.edgesOk = true) {col : Array Nat}
+    (hcol : I.isColouring col = true) {r : Nat} (hr : r < I.nrows) :
+    (I.hitList (I.encode col) r).length = 1 := by
+  have key : ∀ s, s < I.nbase → (I.hitList (I.encode col) s).length = 1 := by
+    intro s hs
+    rcases Nat.lt_or_ge s I.nverts with h | h
+    · exact encode_hitList_vertex I hcol h
+    · obtain ⟨e, i, he, hi, rfl⟩ := I.eq_edgeRow h hs
+      exact encode_hitList_edge I hE hcol he hi
+  rcases Nat.lt_or_ge r I.nbase with h | h
+  · exact key r h
+  · have h2 : r - I.nbase < I.nbase := by simp only [Instance.nrows] at hr; omega
+    rw [show r = (r - I.nbase) + I.nbase by omega, I.hitList_shift _ h2]
+    exact key _ h2
+
+/-- **An encoded colouring meets every row exactly**: `ρ_r = 1 = b̂_r`. -/
+theorem encode_rowSum (I : Instance) (hE : I.edgesOk = true) {col : Array Nat}
+    (hcol : I.isColouring col = true) {r : Nat} (hr : r < I.nrows) :
+    ((problem I).rowSums (I.encode col)).getD r 0 = (problem I).bhat.getD r 0 := by
+  rw [rowSums_spec (problem I) (problem_wf I) _ hr, problem_bhat I hr]
+  have hcount : ((List.range I.nvars).countP
+      fun u => (I.encode col).getD u false
+        && ((problem I).rowsOf.getD u #[]).contains r) = 1 := by
+    rw [List.countP_eq_length_filter,
+      List.filter_congr (q := fun u => (I.encode col).getD u false && (I.rowsOf u).contains r)
+        (fun u hu => by rw [problem_rowsOf I (List.mem_range.mp hu)])]
+    exact encode_hitList_length I hE hcol hr
+  exact_mod_cast hcount
+
+/-- **Completeness of the encoding.**
+
+A proper `n`-colouring of `I` encodes to a zero of the objective. Together with
+`decode_isColouring` this makes the QUBO an exact reduction, not merely a sound one: the only
+hypothesis is `edgesOk`, i.e. that the edge list names real vertices, and `isColouring col`
+itself rules out loops. In particular no lower bound on `ncolours` or `nverts` is needed. -/
+theorem encode_penalty_zero (I : Instance) (hE : I.edgesOk = true) {col : Array Nat}
+    (hcol : I.isColouring col = true) :
+    (problem I).penaltyDoubled (I.encode col) = 0 :=
+  penalty_zero_of_rowSums (problem I) fun _ hr => encode_rowSum I hE hcol hr
+
+/-- **The round trip.** `encode` and `decode` are mutually inverse on colourings: decoding an
+encoded colouring returns it on the nose. (Not needed for the equivalence below, which pairs
+`encode` with the checker directly, but it says the two directions name the same object.) -/
+theorem decode_encode (I : Instance) {col : Array Nat} (hcol : I.isColouring col = true) :
+    I.decode (I.encode col) = col := by
+  have hgetD : ∀ (a : Array Nat) (j d : Nat) (hj : j < a.size), a.getD j d = a[j] := by
+    intro a j d hj
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj]
+    rfl
+  have hsize : (I.decode (I.encode col)).size = col.size := by
+    rw [I.decode_size, Instance.isColouring_size hcol]
+  refine Array.ext hsize ?_
+  intro v hv1 hv2
+  have hv : v < I.nverts := by rw [I.decode_size] at hv1; exact hv1
+  have hcv : col.getD v I.ncolours < I.ncolours := Instance.isColouring_lt hcol hv
+  have hc : 0 < I.ncolours := by omega
+  have hhits : I.hitsAt (I.encode col) v = [col.getD v I.ncolours] := by
+    refine eq_singleton_of_all_eq (List.Nodup.filter _ List.nodup_range) ?_ ?_
+    · simp only [List.mem_filter, List.mem_range]
+      exact ⟨hcv, by rw [I.encode_colVar col hc hv hcv]; simp⟩
+    · intro b hb
+      simp only [List.mem_filter, List.mem_range] at hb
+      rw [I.encode_colVar col hc hv hb.1] at hb
+      exact (beq_iff_eq.mp hb.2).symm
+  rw [← hgetD _ _ I.ncolours hv1, ← hgetD _ _ I.ncolours hv2, I.decode_getD _ hv, hhits]
+  rfl
+
+/-- **The headline: the QUBO has a zero exactly when the graph is `n`-colourable.**
+
+Left to right is `decode_isColouring`, right to left is `encode_penalty_zero`. So a solver
+report of "no zero" is a proof of non-colourability, which is what `triangle_not_two_colourable`
+and `k4_not_three_colourable` below extract. -/
+theorem exists_zero_iff_colourable (I : Instance) (hc : 0 < I.ncolours) (hE : I.edgesOk = true) :
+    (∃ x, (problem I).penaltyDoubled x = 0) ↔ (∃ col, I.isColouring col = true) :=
+  ⟨fun ⟨_, hx⟩ => ⟨_, decode_isColouring I hc hE hx⟩,
+   fun ⟨_, hcol⟩ => ⟨_, encode_penalty_zero I hE hcol⟩⟩
+
+/-- **The empty palette is not a real exception.** `decode_isColouring` needs `0 < ncolours` to
+name a colour; with no colours at all a zero still forces the graph to be colourable, because
+then there are no variables, so a vertex row cannot be met and there can be no vertex either —
+and the empty colouring of the empty graph is proper. -/
+theorem colourable_of_zero (I : Instance) (hE : I.edgesOk = true) {x : Array Bool}
+    (hx : (problem I).penaltyDoubled x = 0) : ∃ col, I.isColouring col = true := by
+  rcases Nat.eq_zero_or_pos I.ncolours with hc | hc
+  · rcases Nat.eq_zero_or_pos I.nverts with hv | hv
+    · refine ⟨#[], ?_⟩
+      simp only [Instance.isColouring, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+        List.mem_range, decide_eq_true_eq, bne_iff_ne, ne_eq]
+      exact ⟨⟨by simp [hv], fun v hvlt => absurd hvlt (by omega)⟩,
+        fun p hp => absurd (Instance.edgesOk_lt hE hp).1 (by omega)⟩
+    · exfalso
+      have hr : 0 < I.nrows := by
+        simp only [Instance.nrows, Instance.nbase, hc, Nat.zero_mul]; omega
+      obtain ⟨u, hu⟩ := hitList_exists I hx hr
+      have hult := (Instance.mem_hitList.mp hu).1
+      simp only [Instance.nvars, hc, Nat.zero_mul] at hult
+      omega
+  · exact ⟨I.decode x, decode_isColouring I hc hE hx⟩
+
+/-- The equivalence with no hypothesis on the palette: for any instance whose edges name real
+vertices, the QUBO has a zero iff the graph is colourable. -/
+theorem exists_zero_iff_colourable' (I : Instance) (hE : I.edgesOk = true) :
+    (∃ x, (problem I).penaltyDoubled x = 0) ↔ (∃ col, I.isColouring col = true) :=
+  ⟨fun ⟨_, hx⟩ => colourable_of_zero I hE hx,
+   fun ⟨_, hcol⟩ => ⟨_, encode_penalty_zero I hE hcol⟩⟩
+
+/-! ## Worked examples
+
+A triangle is 3-colourable but not 2-colourable, and `K₄` is not 3-colourable. The positive
+direction is exhibited by an explicit bit vector; the negative ones are first proved *about the
+QUBO* — no bit vector whatever reaches penalty zero — and then, by completeness, transferred to
+the graphs themselves. -/
 
 /-- `K₃` with three colours. -/
 def triangle : Instance := ⟨3, 3, #[(0, 1), (1, 2), (0, 2)]⟩
@@ -675,6 +1089,38 @@ theorem k4_no_zero (x : Array Bool) : (problem k4).penaltyDoubled x ≠ 0 := by
   have e23 : (k4.decode x).getD 2 k4.ncolours ≠ (k4.decode x).getD 3 k4.ncolours :=
     decode_edge k4 (by decide) (by decide) h (p := (2, 3)) (by decide)
   omega
+
+/-! ### …and as statements about the graphs
+
+Completeness turns the two theorems above into theorems about colourings: if the graph had one,
+`encode` would give the bit vector the QUBO is proved not to have. Nothing here mentions the
+encoding — these are the facts a solver run is now entitled to report. -/
+
+/-- **The triangle is not 2-colourable.** -/
+theorem triangle_not_two_colourable : ¬ ∃ col, triangle2.isColouring col = true := by
+  rintro ⟨col, hcol⟩
+  exact triangle2_no_zero (triangle2.encode col)
+    (encode_penalty_zero triangle2 (by decide) hcol)
+
+/-- **`K₄` is not 3-colourable.** -/
+theorem k4_not_three_colourable : ¬ ∃ col, k4.isColouring col = true := by
+  rintro ⟨col, hcol⟩
+  exact k4_no_zero (k4.encode col) (encode_penalty_zero k4 (by decide) hcol)
+
+/-- The same two facts as the failure of the equivalence's right-hand side, i.e. read off
+`exists_zero_iff_colourable` rather than from `encode` directly. -/
+example : ¬ (∃ col, triangle2.isColouring col = true)
+    ∧ ¬ (∃ col, k4.isColouring col = true) :=
+  ⟨fun h => triangle2_no_zero _
+      ((exists_zero_iff_colourable triangle2 (by decide) (by decide)).mpr h).choose_spec,
+   fun h => k4_no_zero _
+      ((exists_zero_iff_colourable k4 (by decide) (by decide)).mpr h).choose_spec⟩
+
+/-- The triangle *is* 3-colourable, and the witness is the encoded colouring: the positive side
+of `exists_zero_iff_colourable`. -/
+theorem triangle_exists_zero : ∃ x, (problem triangle).penaltyDoubled x = 0 :=
+  (exists_zero_iff_colourable triangle (by decide) (by decide)).mpr
+    ⟨#[0, 1, 2], by decide⟩
 
 /-! ## The network
 

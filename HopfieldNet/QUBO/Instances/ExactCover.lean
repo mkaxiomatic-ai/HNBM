@@ -46,6 +46,13 @@ example instances below discharge `Wf` by `decide`.
   by `QUBO.Problem.zeroOneHamiltonian_eq` (instantiated in `ex1_energy`).
 * `decode_coversExactly` : `penaltyDoubled x = 0 → coversExactly (decode x)`, the soundness of
   the encoding.
+* `encode_penalty_zero` : `coversExactly sel → penaltyDoubled (encode sel) = 0`, its
+  completeness, with no hypothesis on `sel`.
+* `exists_zero_iff_coverable` : the two combined — the QUBO has a zero **iff** the instance has an
+  exact cover. Hence `ex2_no_cover`: `ex2` has no exact cover, upgraded from the finite search of
+  `ex2_no_zero_of_size_two`.
+* `encode_decode`, `decode_encode_perm` : the two maps are mutually inverse (bitwise, resp. up to
+  the order of the listed indices).
 * `refines` : the problem is the (trivial, no-column-deleted) restriction of `inc`, its
   `QUBO.Incidence`.
 -/
@@ -99,6 +106,57 @@ theorem rowSums_eq_bhat_of_penalty_zero (P : Problem) (x : Array Bool)
   have := this.2 r (List.mem_range.mpr hr)
   omega
 
+/-- **The converse: hitting every target makes the objective vanish.**
+
+The easy direction — each summand of `‖Âx−b̂‖²` is separately zero — and the half that turns the
+encoding into a decision procedure rather than a one-sided test. -/
+theorem penalty_zero_of_rowSums_eq (P : Problem) (x : Array Bool)
+    (h : ∀ r < P.nrows, (P.rowSums x).getD r 0 = P.bhat.getD r 0) :
+    P.penaltyDoubled x = 0 := by
+  have hpen : P.penaltyDoubled x
+      = (Array.range P.nrows).foldl
+          (fun acc r => acc + ((P.rowSums x).getD r 0 - P.bhat.getD r 0) *
+            ((P.rowSums x).getD r 0 - P.bhat.getD r 0)) 0 := rfl
+  rw [hpen, ← Array.foldl_toList, Array.toList_range]
+  refine (foldl_sq_zero_iff (fun r => (P.rowSums x).getD r 0 - P.bhat.getD r 0)
+    (List.range P.nrows) 0 le_rfl).mpr ⟨rfl, fun r hr => ?_⟩
+  have := h r (List.mem_range.mp hr)
+  omega
+
+/-- **A unique witness in an arbitrary array is a unique witness in the range.**
+
+If exactly one entry of `sel` — counted *with multiplicity*, as `List.countP` does — satisfies a
+predicate `p` whose witnesses are all `< N`, then exactly one `i < N` both occurs in `sel` and
+satisfies `p`. This is what lets completeness be proved with **no** hypothesis on `sel`: a
+repeated index would be counted twice by `countP`, so `countP p = 1` already rules out any
+duplicate that `p` can see, and an out-of-range index is invisible to `p`. -/
+theorem countP_range_of_countP_eq_one {N : Nat} (sel : Array Nat) (p : Nat → Bool)
+    (hp : ∀ i, p i = true → i < N) (h : sel.toList.countP p = 1) :
+    (List.range N).countP (fun i => sel.contains i && p i) = 1 := by
+  rw [List.countP_eq_length_filter] at h
+  obtain ⟨y, hy⟩ := List.length_eq_one_iff.mp h
+  have hymem : y ∈ sel.toList ∧ p y = true :=
+    List.mem_filter.mp (by rw [hy]; exact List.mem_singleton_self y)
+  have huniq : ∀ z ∈ sel.toList, p z = true → z = y := by
+    intro z hz hpz
+    have hzf : z ∈ sel.toList.filter p := List.mem_filter.mpr ⟨hz, hpz⟩
+    rw [hy] at hzf
+    exact List.mem_singleton.mp hzf
+  have hnd : ((List.range N).filter (fun i => sel.contains i && p i)).Nodup :=
+    List.Nodup.filter _ List.nodup_range
+  rw [List.countP_eq_length_filter, ← List.toFinset_card_of_nodup hnd]
+  have hfin : ((List.range N).filter (fun i => sel.contains i && p i)).toFinset = {y} := by
+    ext z
+    simp only [List.mem_toFinset, List.mem_filter, List.mem_range, Bool.and_eq_true,
+      Array.contains_iff_mem, Finset.mem_singleton]
+    constructor
+    · rintro ⟨-, hz, hpz⟩
+      exact huniq z (Array.mem_toList_iff.mpr hz) hpz
+    · rintro rfl
+      exact ⟨hp _ hymem.2, Array.mem_toList_iff.mp hymem.1, hymem.2⟩
+  rw [hfin]
+  simp
+
 /-- The `ℤ` companion of `Problem.sum_indicator_contains`: summing the membership indicator of a
 duplicate-free array over a containing range returns its size. -/
 theorem sum_indicator_card {N : Nat} (a : Array Nat) (hnd : a.toList.Nodup)
@@ -133,6 +191,13 @@ def numSets (I : Instance) : Nat := I.sets.size
 
 /-- The `i`-th subset, `#[]` out of range. -/
 def setOf (I : Instance) (i : Nat) : Array Nat := I.sets.getD i #[]
+
+/-- Out of range there is no subset: an index `≥ numSets` names the empty set, so it can never
+help cover anything. Used to see that `coversExactly` ignores out-of-range indices. -/
+theorem setOf_of_le (I : Instance) {i : Nat} (hi : I.numSets ≤ i) : I.setOf i = #[] := by
+  unfold Instance.setOf
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by simpa [Instance.numSets] using hi)]
+  rfl
 
 /-- The input is sane: every subset is duplicate-free and inside the ground set. Duplicates
 would make `Â` integer-valued rather than 0/1. -/
@@ -258,6 +323,37 @@ theorem contains_rowsOfSet_lo (I : Instance) (i : Nat) {a : Nat} (ha : a < I.gro
     rw [Array.contains_iff_mem, Array.contains_iff_mem]; exact hiff
   cases hr : (I.rowsOfSet i).contains a <;> cases hc : (I.setOf i).contains a <;> simp_all
 
+/-- **On the upper copy of the rows, membership in the column is membership in the subset,
+shifted.** Row `a + m` carries the same constraint as row `a`. -/
+theorem contains_rowsOfSet_hi (I : Instance) (hI : I.Wf) {i : Nat} (hi : i < I.numSets)
+    {r : Nat} (hlo : I.groundSize ≤ r) :
+    (I.rowsOfSet i).contains r = (I.setOf i).contains (r - I.groundSize) := by
+  have hiff : r ∈ I.rowsOfSet i ↔ (r - I.groundSize) ∈ I.setOf i := by
+    rw [mem_rowsOfSet]
+    constructor
+    · rintro (h | ⟨a, ha, rfl⟩)
+      · have := hI.mem_lt i hi r h; omega
+      · simpa using ha
+    · intro h
+      exact Or.inr ⟨r - I.groundSize, h, by have := hI.mem_lt i hi _ h; omega⟩
+  have h1 : ((I.rowsOfSet i).contains r = true)
+      ↔ ((I.setOf i).contains (r - I.groundSize) = true) := by
+    rw [Array.contains_iff_mem, Array.contains_iff_mem]; exact hiff
+  cases hr : (I.rowsOfSet i).contains r <;>
+    cases hc : (I.setOf i).contains (r - I.groundSize) <;> simp_all
+
+/-- **Both copies at once**: row `r < 2m` is the constraint for the ground-set element `r % m`.
+The uniform reading of a column used by the completeness proof. -/
+theorem contains_rowsOfSet (I : Instance) (hI : I.Wf) {i : Nat} (hi : i < I.numSets)
+    {r : Nat} (hr : r < 2 * I.groundSize) :
+    (I.rowsOfSet i).contains r = (I.setOf i).contains (r % I.groundSize) := by
+  by_cases h : r < I.groundSize
+  · rw [Nat.mod_eq_of_lt h, contains_rowsOfSet_lo I i h]
+  · have hm : I.groundSize ≤ r := by omega
+    rw [show r % I.groundSize = r - I.groundSize from by
+        rw [Nat.mod_eq_sub_mod hm, Nat.mod_eq_of_lt (by omega)],
+      contains_rowsOfSet_hi I hI hi hm]
+
 /-! ### Well-formedness -/
 
 /-- **The exact-cover QUBO is a well-formed 0/1 QUBO in canonical form.**
@@ -313,16 +409,80 @@ theorem refines (I : Instance) (hI : I.Wf) : Problem.Refines (inc I hI) (qubo I)
   rowsOf_eq := fun u hu => by rw [qubo_rowsOf I hu, qubo_varOf I hu]; rfl
   varOf_inj := fun u hu v hv h => by rwa [qubo_varOf I hu, qubo_varOf I hv] at h
 
-/-! ## Decoding and checking -/
+/-! ## Encoding, decoding and checking -/
 
 /-- **The decoder**: the chosen subfamily, as the array of indices `i` with `xᵢ = 1`. -/
 def decode (I : Instance) (x : Array Bool) : Array Nat :=
   ((List.range I.numSets).filter fun i => x.getD i false).toArray
 
+/-- **The encoder**: the characteristic vector of a subfamily, one bit per subset. -/
+def encode (I : Instance) (sel : Array Nat) : Array Bool :=
+  (Array.range I.numSets).map fun i => sel.contains i
+
 /-- **The checker**: every ground-set element is covered exactly once by the chosen subfamily. -/
 def coversExactly (I : Instance) (sel : Array Nat) : Bool :=
   (List.range I.groundSize).all fun a =>
     sel.toList.countP (fun i => (I.setOf i).contains a) == 1
+
+/-- The encoder has one bit per decision variable. -/
+@[simp] theorem encode_size (I : Instance) (sel : Array Nat) :
+    (encode I sel).size = I.numSets := by simp [encode]
+
+/-- Reading the encoder: bit `i` is set exactly when subset `i` is chosen. -/
+theorem encode_getD (I : Instance) (sel : Array Nat) {i : Nat} (hi : i < I.numSets) :
+    (encode I sel).getD i false = sel.contains i :=
+  map_range_getD _ _ _ hi
+
+/-- Reading the decoder. -/
+theorem mem_decode (I : Instance) (x : Array Bool) (i : Nat) :
+    i ∈ decode I x ↔ (i < I.numSets ∧ x.getD i false = true) := by
+  rw [← Array.mem_toList_iff]
+  show i ∈ ((List.range I.numSets).filter (fun i => x.getD i false)).toArray.toList ↔ _
+  simp [List.mem_filter]
+
+/-- **The decoder produces a duplicate-free selection** — it is a sublist of `range numSets`. -/
+theorem decode_nodup (I : Instance) (x : Array Bool) : (decode I x).toList.Nodup := by
+  show ((List.range I.numSets).filter _).toArray.toList.Nodup
+  simpa using List.Nodup.filter (fun i => x.getD i false) List.nodup_range
+
+/-- **The decoder produces an in-range selection.** -/
+theorem decode_mem_lt (I : Instance) (x : Array Bool) : ∀ i ∈ decode I x, i < I.numSets :=
+  fun _ hi => ((mem_decode I x _).mp hi).1
+
+/-! ### Round trips
+
+`encode` and `decode` are mutually inverse on the data they are meant for: bitwise on the
+variables, and up to the order of the listed indices on duplicate-free in-range selections. -/
+
+/-- **`encode ∘ decode = id`** on the bits that the objective reads. (It is not the identity on
+all of `Array Bool`: `encode` truncates to `numSets` entries.) -/
+theorem encode_decode (I : Instance) (x : Array Bool) {i : Nat} (hi : i < I.numSets) :
+    (encode I (decode I x)).getD i false = x.getD i false := by
+  rw [encode_getD I _ hi]
+  by_cases h : x.getD i false = true
+  · rw [h]; exact Array.contains_iff_mem.mpr ((mem_decode I x i).mpr ⟨hi, h⟩)
+  · simp only [Bool.not_eq_true] at h
+    rw [h, Bool.eq_false_iff, ne_eq, Array.contains_iff_mem]
+    intro hm
+    rw [((mem_decode I x i).mp hm).2] at h
+    exact absurd h (by simp)
+
+/-- **`decode ∘ encode = id` up to order** on duplicate-free, in-range selections: `decode`
+returns the same indices, in increasing order. -/
+theorem decode_encode_perm (I : Instance) {sel : Array Nat} (hnd : sel.toList.Nodup)
+    (hlt : ∀ i ∈ sel, i < I.numSets) :
+    (decode I (encode I sel)).toList.Perm sel.toList := by
+  have hfil : (decode I (encode I sel)).toList
+      = (List.range I.numSets).filter (fun i => sel.contains i) := by
+    show ((List.range I.numSets).filter (fun i => (encode I sel).getD i false)).toArray.toList = _
+    rw [List.toList_toArray]
+    exact List.filter_congr (fun i hi => by rw [encode_getD I sel (List.mem_range.mp hi)])
+  rw [hfil]
+  refine List.perm_of_nodup_nodup_toFinset_eq (List.Nodup.filter _ List.nodup_range) hnd ?_
+  ext i
+  simp only [List.mem_toFinset, List.mem_filter, List.mem_range, Array.contains_iff_mem,
+    Array.mem_toList_iff]
+  exact ⟨fun h => h.2, fun h => ⟨hlt i h, h⟩⟩
 
 /-! ## Soundness -/
 
@@ -362,6 +522,66 @@ theorem decode_coversExactly (I : Instance) (hI : I.Wf) (x : Array Bool)
   rw [hcnt] at hrow
   rw [beq_iff_eq, countP_decode]
   exact_mod_cast hrow
+
+/-! ## Completeness
+
+The converse of `decode_coversExactly`: an exact cover encodes to a zero. Together the two give
+`exists_zero_iff_coverable`, which is what makes a *negative* answer from the QUBO mean
+something about exact cover. -/
+
+/-- **Completeness of the encoding**: an exact cover encodes to a zero of the objective.
+
+No hypothesis whatsoever on `sel` — not duplicate-freeness, not in-rangeness. That looks too
+good, since `coversExactly` counts with `List.countP`, i.e. *with multiplicity*; the point is
+that this makes `coversExactly` self-policing. If `sel` repeated an index `i` with
+`a ∈ Sᵢ` then element `a` would be counted twice and the checker would already be `false`, and an
+index `i ≥ numSets` has `Sᵢ = ∅` (`Instance.setOf_of_le`) so it is invisible to the checker and to
+`encode`'s characteristic vector alike. `countP_range_of_countP_eq_one` is where this is used.
+
+The one hypothesis is `hI : I.Wf` on the *instance* — a real restriction, but the same one
+`qubo_wf` and `decode_coversExactly` already carry: out-of-range elements of a subset would be
+dropped by the row construction, and a repeated element would make `Â` non-`0/1`. -/
+theorem encode_penalty_zero (I : Instance) (hI : I.Wf) {sel : Array Nat}
+    (hsel : coversExactly I sel = true) :
+    (qubo I).penaltyDoubled (encode I sel) = 0 := by
+  have hW := qubo_wf I hI
+  refine penalty_zero_of_rowSums_eq (qubo I) _ (fun r hr => ?_)
+  have hr' : r < 2 * I.groundSize := by simpa using hr
+  have ha : r % I.groundSize < I.groundSize := Nat.mod_lt _ (by omega)
+  rw [Problem.rowSums_spec (qubo I) hW _ hr, qubo_bhat I hr']
+  -- the row sum of row `r` counts the chosen subsets containing the element `r % m`
+  have hcnt : (List.range (qubo I).nvars).countP
+        (fun u => (encode I sel).getD u false && ((qubo I).rowsOf.getD u #[]).contains r)
+      = (List.range I.numSets).countP
+          (fun i => sel.contains i && (I.setOf i).contains (r % I.groundSize)) := by
+    refine List.countP_congr (fun i hi => ?_)
+    have hi' : i < I.numSets := List.mem_range.mp hi
+    rw [encode_getD I sel hi', qubo_rowsOf I hi', contains_rowsOfSet I hI hi' hr']
+  rw [hcnt]
+  -- and the checker says that count is one
+  have hcov : sel.toList.countP (fun i => (I.setOf i).contains (r % I.groundSize)) = 1 := by
+    simpa using (List.all_eq_true.mp hsel) (r % I.groundSize) (List.mem_range.mpr ha)
+  have hp : ∀ i, ((I.setOf i).contains (r % I.groundSize)) = true → i < I.numSets := by
+    intro i hi
+    by_contra hcon
+    rw [setOf_of_le I (by omega)] at hi
+    simp at hi
+  rw [countP_range_of_countP_eq_one sel _ hp hcov]
+  rfl
+
+/-- **The headline: the QUBO has a zero iff the instance has an exact cover.**
+
+`→` is `decode_coversExactly`, `←` is `encode_penalty_zero`. No round trip is needed because
+neither side of the equivalence mentions the other's witness; `decode_encode_perm` and
+`encode_decode` record that the two maps are nevertheless mutually inverse.
+
+Read from right to left this says the encoding is complete; read from left to right, that it is
+sound. Contrapositive of `←`: *no zero of the objective* is a proof that no exact cover
+exists (`ex2_no_cover` below). -/
+theorem exists_zero_iff_coverable (I : Instance) (hI : I.Wf) :
+    (∃ x, (qubo I).penaltyDoubled x = 0) ↔ (∃ sel, coversExactly I sel = true) :=
+  ⟨fun ⟨x, hx⟩ => ⟨decode I x, decode_coversExactly I hI x hx⟩,
+   fun ⟨sel, hsel⟩ => ⟨encode I sel, encode_penalty_zero I hI hsel⟩⟩
 
 /-! ## Worked examples
 
@@ -403,6 +623,16 @@ example : (qubo ex1).penaltyDoubled #[true, true, false, false, true] ≠ 0 := b
 example : coversExactly ex1 (decode ex1 #[true, true, false, false, false]) = true :=
   decode_coversExactly ex1 ex1_wf _ (by decide +kernel)
 
+/-- Completeness, run on the same solution given as a subfamily. -/
+example : (qubo ex1).penaltyDoubled (encode ex1 #[0, 1]) = 0 :=
+  encode_penalty_zero ex1 ex1_wf (by decide +kernel)
+
+example : encode ex1 #[0, 1] = #[true, true, false, false, false] := by decide +kernel
+
+/-- The iff, right to left: `ex1` is coverable, so its QUBO has a zero. -/
+example : ∃ x, (qubo ex1).penaltyDoubled x = 0 :=
+  (exists_zero_iff_coverable ex1 ex1_wf).mpr ⟨#[2, 3], by decide +kernel⟩
+
 /-! The whole search space of `ex1`: at each of the `2⁵` assignments the objective is zero
 exactly when the decoded subfamily is an exact cover. `decode_coversExactly` is the `→` half of
 this, proved for every instance; the scan also exhibits the converse here. Prints `true`. -/
@@ -426,8 +656,31 @@ theorem ex2_wf : ex2.Wf := by
 
 /-- **No assignment reaches zero.** Only the first `nvars = 2` entries of the bit vector are
 read, so these four arrays exhaust the search space. -/
-example : ∀ x ∈ [#[false, false], #[true, false], #[false, true], #[true, true]],
+theorem ex2_no_zero_of_size_two :
+    ∀ x ∈ [#[false, false], #[true, false], #[false, true], #[true, true]],
     (qubo ex2).penaltyDoubled x ≠ 0 := by decide +kernel
+
+/-- **`ex2` has no exact cover** — a statement about exact covers, not about the QUBO.
+
+This is the point of completeness. The finite check above says nothing about the infinitely many
+`x : Array Bool`; `encode_penalty_zero` turns a *hypothetical cover* into one of these four
+vectors, and the check then refutes it. No side condition on `sel`: literally no array of indices
+passes `coversExactly ex2`. -/
+theorem ex2_no_cover : ¬ ∃ sel, coversExactly ex2 sel = true := by
+  rintro ⟨sel, hsel⟩
+  have h0 := encode_penalty_zero ex2 ex2_wf hsel
+  have henc : encode ex2 sel = #[sel.contains 0, sel.contains 1] := by
+    show (Array.range ex2.numSets).map _ = _
+    rw [show ex2.numSets = 2 from rfl]
+    simp [Array.range_succ, show Array.range 0 = #[] from rfl]
+  rw [henc] at h0
+  revert h0
+  cases hb0 : sel.contains 0 <;> cases hb1 : sel.contains 1 <;> decide +kernel
+
+/-- **And hence no zero at all**, over every `x : Array Bool` — the finite check above upgraded
+through the iff. -/
+theorem ex2_no_zero : ¬ ∃ x, (qubo ex2).penaltyDoubled x = 0 :=
+  fun h => ex2_no_cover ((exists_zero_iff_coverable ex2 ex2_wf).mp h)
 
 /-! The same scan as for `ex1`: nothing is an exact cover and nothing reaches zero.
 Prints `true`. -/

@@ -27,8 +27,19 @@ Other targets: `lake build MCMC`, `lake build PF`, `lake build CNS`, `lake build
 | `CNS` | collaborative neurodynamic Sudoku — see below |
 | `CNSDemo` | `#animate` infoview demos; not a default target, since the frames are computed during elaboration |
 
-Known gap: `MCMC/Gibbs.lean` contains 22 `sorry`s and is not reachable from the default target.
-Nothing else in the repository uses `sorry` or declares an `axiom`.
+No `sorry`, no `axiom`, no `native_decide`, anywhere: zero live occurrences across all 141
+tracked `.lean` files. (Check them with comments masked — `MCMC/Gibbs.lean` has 22 occurrences of
+the *word* `sorry` and an earlier version of this README reported them as real. They are all
+inside `/- … -/` blocks, so Lean never sees them.)
+
+Known gap: `MCMC/Gibbs.lean` is a sketch rather than a development. Two declarations are live —
+`marginal_β` and `marginal_β_nonneg` — and the remaining ~260 lines are a commented-out plan:
+that the Gibbs kernel is Metropolis–Hastings with acceptance ratio `1`, that an MH kernel
+inherits strict positivity, irreducibility and primitivity from its proposal, and hence, through
+`PF`, a unique stationary distribution. Worth doing, and it would join `MCMC` to `PF`, but it is
+not on the critical path: `HopfieldNet.Quiver.BM.Ergodicity` already establishes a unique
+stationary Boltzmann distribution for the random-scan chain by a different route, and nothing
+imports `MCMC.Gibbs`.
 
 ## `HopfieldNet/CNS` — collaborative neurodynamic Sudoku
 

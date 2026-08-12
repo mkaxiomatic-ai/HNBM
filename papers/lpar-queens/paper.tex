@@ -492,6 +492,59 @@ the default schedule; at the default schedule no seed among the first sixty succ
 two instances with givens. The animations are chosen to end on a solved board. The honest summary of
 what one machine can do is the last column of the table above.
 
+\section{Related work}\label{sec:related}
+
+\noindent\textbf{The problem.} Bell and Stevens survey what is known about
+$n$-queens~\citeref{bell2009}. The completion question goes back to Nauck in 1850; Gent, Jefferson
+and Nightingale proved it \textsf{NP}-complete and $\#\textsf{P}$-complete~\citeref{gent2017}, and
+Glock, Munhá Correia and Sudakov showed that any placement of at most $n/60$ mutually non-attacking
+queens can be completed while some placements of about $n/4$ cannot~\citeref{glock2022}. Their bound
+is asymptotic, so it does not speak to our $7\times7$ example of \secref{sec:correct}. Counting
+solutions of the unconstrained problem is a separate line of work~\citeref{simkin2021}.
+
+\medskip\noindent\textbf{Neural approaches to $n$-queens.} These begin with the Hopfield--Tank
+programme for optimization and the criticisms of it by Wilson and Pawley. Mańdziuk applied a binary
+Hopfield-type network directly to $n$-queens~\citeref{mandziuk1995}; as \secref{sec:notclaim}
+records, it is a better solver than ours. Mérida, Muñoz and Benítez used $n$-queens as the benchmark
+for a multivalued recurrent network~\citeref{merida2001}. The solver we use is an instance of the
+collaborative neurodynamic framework of Che and Wang~\citeref{che2019}, which does come with a
+global convergence claim --- but for an augmented-Lagrangian neurodynamic model, not for the
+momentum recurrences of eqs.~(3) and~(6) that~\citeref{liwang2022} actually iterates, and this is
+the gap \secref{sec:net} describes.
+
+\medskip\noindent\textbf{QUBO encodings, and at-most-one in particular.} Lucas's
+catalogue~\citeref{lucas2014ising} and the tutorial of Glover, Kochenberger and
+Du~\citeref{glover2019} are the standard references; neither treats $n$-queens. The closest work to
+our \secref{sec:enc} is Codognet~\citeref{codognet2023}, who compares several QUBO encodings of the
+at-most-one constraint \emph{using $n$-queens as the example domain}, on a D-Wave annealer and on a
+quantum-inspired engine. That is the same constraint on the same problem, and the difference is
+exactly the one this paper is about: the encodings there are compared by measurement, and none is
+proved to be faithful.
+
+\medskip\noindent\textbf{Verified encodings.} That a solver can be trustworthy while the encoding
+handed to it is not is by now a recognised gap, and it has been attacked for propositional
+formalisms. Codel, Avigad and Heule verify CNF encodings in Lean, including at-most-one and
+at-most-$k$~\citeref{codel2023}; Szeider's PBLean imports pseudo-Boolean certificates into Lean~4
+and, in the same spirit as this paper, formalizes both the constraint translation and its
+correctness proof so that theorems about the original problem follow~\citeref{szeider2026}. On the
+solver side, the VeriPB line of work provides certificates for pseudo-Boolean and constraint
+solving~\citeref{bogaerts2022}, and Subercaseaux and Heule adopted a verified approach precisely
+because their encoding had become too intricate to trust~\citeref{subercaseaux2023}. Our
+contribution is the analogous step for the canonical form $\lVert Ax-b\rVert^2$ rather than for CNF
+or cutting planes, with the extra ingredient that the target formalism is a \emph{network} whose energy
+we identify with the objective.
+
+\medskip\noindent\textbf{Formalizing this problem, and problems like it.} Malekpour verified, in
+PVS, a closed-form algorithm producing an $n$-queens solution for every $n > 3$~\citeref{malekpour2020}.
+That is prior formal verification of $n$-queens, and the contrast is sharp: it verifies a
+\emph{construction} for the variant that is always solvable, whereas we verify a \emph{reduction}
+for the variant that is \textsf{NP}-complete, and it is the reduction that makes negative answers
+meaningful. Gäher and Kunze mechanised the Cook--Levin theorem in Coq~\citeref{gaeher2021},
+formalizing polynomial-time reductions in general rather than one concrete encoding for one solver.
+Closest in shape to this paper, and at this venue, is Weber's SAT-based Sudoku
+solver~\citeref{weber2006}: a puzzle encoded into a solver formalism and evaluated
+empirically, without a proof that the encoding is correct.
+
 \section{What we do not claim}\label{sec:notclaim}
 
 \begin{itemize}\itemsep2pt
@@ -529,24 +582,50 @@ not in the encoding, and it must not be read as a remedy.
 \end{itemize}
 
 \section*{Acknowledgements}
-% TODO
+% TODO: acknowledgements
 \bibliographystyle{plain}
-\begin{thebibliography}{9}
+\begin{thebibliography}{99}
 
 \bibitem{hnbm}
 M.~Cipollina, M.~Karatarakis, and F.~Wiedijk.
 \newblock Formalized Hopfield networks and Boltzmann machines.
 \newblock In \emph{LPAR-26}, EPiC Series in Computing, 2026. To appear.
 
+\bibitem{bell2009}
+J.~Bell and B.~Stevens.
+\newblock A survey of known results and research areas for $n$-queens.
+\newblock \emph{Discrete Mathematics}, 309(1):1--31, 2009.
+
 \bibitem{gent2017}
 I.~P.~Gent, C.~Jefferson, and P.~Nightingale.
 \newblock Complexity of $n$-Queens Completion.
 \newblock \emph{Journal of Artificial Intelligence Research}, 59:815--848, 2017.
 
-\bibitem{lucas2014ising}
-A.~Lucas.
-\newblock Ising formulations of many NP problems.
-\newblock \emph{Frontiers in Physics}, 2:5, 2014.
+\bibitem{glock2022}
+S.~Glock, D.~Munh\'{a} Correia, and B.~Sudakov.
+\newblock The $n$-queens completion problem.
+\newblock \emph{Research in the Mathematical Sciences}, 9:41, 2022. arXiv:2111.11402.
+
+\bibitem{simkin2021}
+M.~Simkin.
+\newblock The number of $n$-queens configurations.
+\newblock arXiv:2107.13460, 2021.
+
+\bibitem{mandziuk1995}
+J.~Ma\'{n}dziuk.
+\newblock Solving the $N$-Queens problem with a binary Hopfield-type network.
+\newblock \emph{Biological Cybernetics}, 72:439--445, 1995. DOI 10.1007/BF00201419.
+
+\bibitem{merida2001}
+E.~M\'{e}rida, J.~Mu\~{n}oz, and R.~Ben\'{i}tez.
+\newblock A recurrent multivalued neural network for the $N$-Queens problem.
+\newblock In \emph{Connectionist Models of Neurons, Learning Processes and Artificial
+Intelligence}, volume 2084 of LNCS. Springer, 2001.
+
+\bibitem{che2019}
+H.~Che and J.~Wang.
+\newblock A collaborative neurodynamic approach to global and combinatorial optimization.
+\newblock \emph{Neural Networks}, 114:15--27, 2019. DOI 10.1016/j.neunet.2019.02.002.
 
 \bibitem{liwang2022}
 H.~Li and J.~Wang.
@@ -554,10 +633,58 @@ H.~Li and J.~Wang.
 \newblock In \emph{12th International Conference on Information Science and Technology (ICIST)},
 pages 8--17. IEEE, 2022.
 
-\bibitem{mandziuk1995}
-J.~Ma\'{n}dziuk.
-\newblock Solving the $N$-Queens problem with a binary Hopfield-type network.
-\newblock \emph{Biological Cybernetics}, 72:439--445, 1995. \newblock DOI 10.1007/BF00201419.
+\bibitem{lucas2014ising}
+A.~Lucas.
+\newblock Ising formulations of many NP problems.
+\newblock \emph{Frontiers in Physics}, 2:5, 2014. arXiv:1302.5843.
+
+\bibitem{glover2019}
+F.~Glover, G.~Kochenberger, and Y.~Du.
+\newblock Quantum bridge analytics I: a tutorial on formulating and using QUBO models.
+\newblock arXiv:1811.11538, 2019.
+
+\bibitem{codognet2023}
+P.~Codognet.
+\newblock Encoding the at-most-one constraint for QUBO and quantum annealing: experiments with the
+$N$-Queens problem.
+\newblock In \emph{Companion Proceedings of the Genetic and Evolutionary Computation Conference
+(GECCO '23)}. ACM, 2023. DOI 10.1145/3583133.3596394.
+
+\bibitem{codel2023}
+C.~R.~Codel, J.~Avigad, and M.~J.~H.~Heule.
+\newblock Verified encodings for SAT solvers.
+\newblock In \emph{Formal Methods in Computer-Aided Design (FMCAD 2023)}. TU Wien Academic Press,
+2023.
+
+\bibitem{szeider2026}
+S.~Szeider.
+\newblock PBLean: pseudo-Boolean proof certificates for Lean~4.
+\newblock arXiv:2602.08692, 2026.
+
+\bibitem{bogaerts2022}
+B.~Bogaerts, S.~Gocht, C.~McCreesh, and J.~Nordstr\"{o}m.
+\newblock Certified symmetry and dominance breaking for combinatorial optimisation.
+\newblock arXiv:2203.12275, 2022.
+
+\bibitem{subercaseaux2023}
+B.~Subercaseaux and M.~J.~H.~Heule.
+\newblock The packing chromatic number of the infinite square grid is 15.
+\newblock In \emph{TACAS 2023}. Springer, 2023. arXiv:2301.09757.
+
+\bibitem{malekpour2020}
+M.~R.~Malekpour.
+\newblock Formal verification of a solution to the $n$-Queens problem.
+\newblock Technical Memorandum NASA/TM-2020, NASA Langley Research Center, April 2020.
+
+\bibitem{gaeher2021}
+L.~G\"{a}her and F.~Kunze.
+\newblock Mechanising complexity theory: the Cook--Levin theorem in Coq.
+\newblock In \emph{Interactive Theorem Proving (ITP 2021)}, volume 193 of LIPIcs, article 20, 2021.
+
+\bibitem{weber2006}
+T.~Weber.
+\newblock A SAT-based Sudoku solver.
+\newblock In \emph{LPAR-12 Short Paper Proceedings}, pages 11--15, 2006.
 
 \end{thebibliography}
 

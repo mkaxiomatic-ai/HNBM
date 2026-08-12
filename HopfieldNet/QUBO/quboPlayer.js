@@ -1,6 +1,7 @@
 /* Generic QUBO player: a timeline over frames, with a renderer chosen by `kind`.
-   Sudoku frames are 81-character boards; graph frames are one character per vertex.
-   Forked from CNS/sudokuPlayer.js.
+   Sudoku frames are 81-character boards; graph frames are one character per vertex;
+   matrix frames one character per column; board (n-queens) frames one character per
+   board row, the queen's column in base 36. Forked from CNS/sudokuPlayer.js.
 
 Animation player for the CNS Sudoku pipeline (Li & Wang, ICIST 2022).
 
@@ -403,6 +404,165 @@ function matrixConflicts(frame, mrows, mcols, cells) {
   return bad
 }
 
+/* ---------------------------------------------------------------- board view
+
+An n-Queens board. A frame is one character per board *row*: '.' if that row holds no
+queen, otherwise the queen's column in base 36. `nverts` carries the board size N and
+`edges` the given queens as (row, column) pairs, so the prop structure is unchanged.
+
+Two queens attack when they share a column, a difference diagonal (i - c) or a sum
+diagonal (i + c) -- exactly the three clauses of `Queens.Instance.isQueens`. Every
+attacking pair is drawn as a dashed segment between the two queens and both squares are
+washed, so what you watch burning off is the objective's residual and not a paraphrase
+of it. Given queens are ringed and set in primary ink; queens the search placed are in
+slot-2 orange. The conflict marker carries no hue, as in the Sudoku view. */
+
+/** Column of the queen in each board row, or `null` where there is none. */
+function queenCols(frame, n) {
+  const out = []
+  for (let i = 0; i < n; i++) {
+    const ch = frame[i]
+    if (ch === undefined || ch === '.') { out.push(null); continue }
+    const c = parseInt(ch, 36)
+    out.push(Number.isNaN(c) || c >= n ? null : c)
+  }
+  return out
+}
+
+/** Attacking pairs `[i, k]` with `i < k`. */
+function boardAttacks(frame, n) {
+  const q = queenCols(frame, n)
+  const pairs = []
+  for (let i = 0; i < n; i++) {
+    for (let k = i + 1; k < n; k++) {
+      const a = q[i], b = q[k]
+      if (a === null || b === null) continue
+      if (a === b || i - a === k - b || i + a === k + b) pairs.push([i, k])
+    }
+  }
+  return pairs
+}
+
+/** Board rows that are empty or hold an attacked queen. */
+function boardConflicts(frame, n) {
+  const q = queenCols(frame, n)
+  const bad = new Set()
+  for (let i = 0; i < n; i++) if (q[i] === null) bad.add(i)
+  for (const [i, k] of boardAttacks(frame, n)) { bad.add(i); bad.add(k) }
+  return bad
+}
+
+/* Board palette. Fixed rather than theme-derived: a chessboard is a recognisable object and
+   these two mid-tones read correctly against both the light and the dark infoview. */
+const SQ_LIGHT = '#f0d9b5'
+const SQ_DARK = '#b58863'
+const SQ_EDGE = '#8a6242'
+const ATTACK = '#c0392b'
+
+/** A chess queen, drawn from primitives in a 0..1 box so it scales to any square size.
+    Deliberately not the '♛' glyph: that depends on a font the infoview may not have, and when
+    it is missing nothing is drawn at all. `dark` selects a black or a white piece. */
+function QueenPiece(key, x0, y0, C, dark) {
+  const P = (u, v) => [x0 + u * C, y0 + v * C]
+  const body = dark ? '#26221e' : '#fbfaf7'
+  const edge = dark ? '#0d0b0a' : '#4a423a'
+  const sw = Math.max(0.7, C * 0.045)
+  const pt = (u, v) => P(u, v).join(',')
+  const crown = [
+    [0.14, 0.255], [0.265, 0.45], [0.32, 0.185], [0.41, 0.45],
+    [0.50, 0.155], [0.59, 0.45], [0.68, 0.185], [0.735, 0.45], [0.86, 0.255],
+    [0.80, 0.555], [0.20, 0.555],
+  ].map(([u, v]) => pt(u, v)).join(' ')
+  const balls = [[0.14, 0.235], [0.32, 0.165], [0.50, 0.135], [0.68, 0.165], [0.86, 0.235]]
+  const els = [
+    // crown
+    h('polygon', { key: key + 'c', points: crown, fill: body, stroke: edge, strokeWidth: sw,
+      strokeLinejoin: 'round' }),
+    // collar
+    h('rect', { key: key + 'k', x: P(0.175, 0)[0], y: P(0, 0.555)[1],
+      width: C * 0.65, height: C * 0.085, rx: C * 0.03,
+      fill: body, stroke: edge, strokeWidth: sw }),
+    // tapered body down to the plinth
+    h('path', {
+      key: key + 'b',
+      d: `M ${pt(0.255, 0.64)} C ${pt(0.255, 0.78)} ${pt(0.205, 0.83)} ${pt(0.165, 0.875)}`
+        + ` L ${pt(0.835, 0.875)} C ${pt(0.795, 0.83)} ${pt(0.745, 0.78)} ${pt(0.745, 0.64)} Z`,
+      fill: body, stroke: edge, strokeWidth: sw, strokeLinejoin: 'round',
+    }),
+    // plinth
+    h('rect', { key: key + 'p', x: P(0.125, 0)[0], y: P(0, 0.875)[1],
+      width: C * 0.75, height: C * 0.075, rx: C * 0.028,
+      fill: body, stroke: edge, strokeWidth: sw }),
+  ]
+  balls.forEach(([u, v], i) => els.push(h('circle', {
+    key: key + 'q' + i, cx: P(u, v)[0], cy: P(u, v)[1], r: C * 0.072,
+    fill: body, stroke: edge, strokeWidth: sw,
+  })))
+  return h('g', { key: key }, els)
+}
+
+function Chequer({ frame, nverts, givens }) {
+  const n = Math.max(1, nverts)
+  const C = Math.max(18, Math.min(40, Math.floor(320 / n)))
+  const S = C * n
+  const M = Math.round(C * 0.55)            // margin for rank/file labels
+  const q = queenCols(frame, n)
+  const given = new Map()
+  givens.forEach(([r, c]) => given.set(r, c))
+  const bad = boardConflicts(frame, n)
+  const els = []
+
+  // squares
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      els.push(h('rect', {
+        key: 's' + i + '_' + j, x: j * C, y: i * C, width: C, height: C,
+        fill: (i + j) % 2 === 0 ? SQ_LIGHT : SQ_DARK,
+      }))
+    }
+  }
+  // a wash under every attacked queen's square
+  for (const i of bad) {
+    if (q[i] === null) continue
+    els.push(h('rect', {
+      key: 'w' + i, x: q[i] * C, y: i * C, width: C, height: C,
+      fill: ATTACK, opacity: 0.28,
+    }))
+  }
+  // the lines of attack
+  boardAttacks(frame, n).forEach(([i, k], e) => els.push(h('line', {
+    key: 'a' + e,
+    x1: q[i] * C + C / 2, y1: i * C + C / 2, x2: q[k] * C + C / 2, y2: k * C + C / 2,
+    stroke: ATTACK, strokeWidth: Math.max(1.5, C * 0.07), strokeDasharray: '5 3',
+    opacity: 0.95,
+  })))
+  // board edge
+  els.push(h('rect', {
+    key: 'bd', x: 0, y: 0, width: S, height: S,
+    fill: 'none', stroke: SQ_EDGE, strokeWidth: 2,
+  }))
+  // files (a, b, c, …) along the bottom and ranks (n … 1) down the left
+  const lab = { fontSize: Math.round(C * 0.34), fill: 'var(--text-secondary)', key: undefined }
+  for (let j = 0; j < n; j++) {
+    els.push(h('text', { ...lab, key: 'f' + j, x: j * C + C / 2, y: S + M * 0.8,
+      textAnchor: 'middle' }, String.fromCharCode(97 + j)))
+  }
+  for (let i = 0; i < n; i++) {
+    els.push(h('text', { ...lab, key: 'r' + i, x: -M * 0.3, y: i * C + C / 2,
+      textAnchor: 'end', dominantBaseline: 'central' }, String(n - i)))
+  }
+  // the pieces: a given queen is a black piece, one the search placed is a white piece
+  for (let i = 0; i < n; i++) {
+    if (q[i] === null) continue
+    els.push(QueenPiece('p' + i, q[i] * C, i * C, C, given.get(i) === q[i]))
+  }
+  return h('svg', {
+    width: S + M + 4, height: S + M + 4,
+    viewBox: `${-M - 2} -2 ${S + M + 4} ${S + M + 4}`,
+    style: { display: 'block' },
+  }, els)
+}
+
 export default function (props) {
   const { title, frames, givens, phase, pen, outer, solved, note } = props
   const kind = props.kind || 'sudoku'
@@ -433,8 +593,9 @@ export default function (props) {
   const conflicts = React.useMemo(
     () => kind === 'graph' ? graphConflicts(frame, edges)
          : kind === 'matrix' ? matrixConflicts(frame, mrows, mcols, cells)
+         : kind === 'board' ? boardConflicts(frame, nverts)
          : conflictCells(frame),
-    [frame, kind, edges, mrows, mcols, cells])
+    [frame, kind, edges, mrows, mcols, cells, nverts])
   const searchStart = React.useMemo(() => {
     const k = phase.indexOf(1)
     return k < 0 ? n : k
@@ -446,6 +607,11 @@ export default function (props) {
     return f
   }, [frame])
 
+  // queens actually on the board, for the board caption
+  const placed = React.useMemo(
+    () => kind === 'board' ? queenCols(frame, nverts).filter((c) => c !== null).length : 0,
+    [frame, kind, nverts])
+
   const restart = () => { setI(0); setPlaying(true) }
   const toggle = () => {
     if (i + 1 >= n) restart()
@@ -456,9 +622,12 @@ export default function (props) {
     `frame ${i + 1}/${n}`,
     ph === 0 ? `Algorithm 1, ${i} deduction${i === 1 ? '' : 's'}`
              : `Algorithm 2, outer ${outer[i]}`,
-    `${filled}/81 filled`,
+    kind === 'board' ? `${placed}/${nverts} queens` : `${filled}/81 filled`,
     ph === 1 && pen[i] >= 0 ? `‖Ax−b‖² = ${pen[i]}` : null,
-    conflicts.size > 0 ? `${conflicts.size} cells in conflict` : null,
+    conflicts.size > 0
+      ? (kind === 'board' ? `${conflicts.size} rows in conflict`
+                          : `${conflicts.size} cells in conflict`)
+      : null,
   ].filter(Boolean).join(' · ')
 
   const key = (color, label, opts) => h('span', { className: 'cns-key', key: label },
@@ -485,7 +654,9 @@ export default function (props) {
       ? h(Graph, { frame, nverts, edges, ncolours })
       : kind === 'matrix'
         ? h(Matrix, { frame, mrows, mcols, cells })
-        : h(Board, { frame, givens, phase: ph, conflicts }),
+        : kind === 'board'
+          ? h(Chequer, { frame, nverts, givens: edges })
+          : h(Board, { frame, givens, phase: ph, conflicts }),
     h('div', { className: 'cns-row' },
       h('button', { onClick: toggle, title: 'play / pause' },
         playing ? '⏸' : (i + 1 >= n ? '↻' : '▶')),
@@ -516,7 +687,8 @@ export default function (props) {
       key('var(--alg2)', 'Algorithm 2'),
       conflicts.size > 0
         ? key(null, kind === 'graph' ? 'monochromatic edge'
-                  : kind === 'matrix' ? 'row not covered exactly once' : 'conflict',
+                  : kind === 'matrix' ? 'row not covered exactly once'
+                  : kind === 'board' ? 'attacking pair' : 'conflict',
             { ring: true })
         : null,
     ),

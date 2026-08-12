@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import HopfieldNet.QUBO.Instances.Colouring
 import HopfieldNet.QUBO.Instances.ExactCover
 import HopfieldNet.QUBO.Instances.EdgeColouring
+import HopfieldNet.QUBO.Instances.Queens.Widget
 import HopfieldNet.QUBO.Search
 import HopfieldNet.QUBO.Widget
 
@@ -27,6 +28,10 @@ import HopfieldNet.QUBO.Instances.Demo
 
 #edgecolour k3         -- edge colouring, shown on the line graph
 #edgecolour path4      -- a path needs only two edge colours
+
+#queens classic8       -- 8-queens, the swarm: one frame per outer iteration
+#queensAt small6 11    -- one Boltzmann anneal on a pinned seed, one frame per sweep
+#queensRefute blocked4 -- a blocked completion: the search correctly finds no zero
 ```
 
 Nothing about this is Sudoku. The search (`QUBO.search`), the dynamics of eqs (3) and (6), and
@@ -357,3 +362,57 @@ macro "#refute " g:term : command =>
 /-- `#edgecolour k3` — edge-colour a graph, shown on its line graph. -/
 macro "#edgecolour " g:term : command =>
   Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.EdgeColouring.animate $g)
+
+/-! ## `n`-Queens Completion
+
+Drawn as an `N × N` chequerboard, one queen per occupied board row, with every attacking pair
+joined by a dashed segment and both squares washed. Given queens are ringed and set in primary
+ink; the ones the search placed are in slot-2 orange. The picture is of the constraint: a segment
+is drawn exactly when one of the three pairwise clauses of `Queens.Instance.isQueens` fails, which
+is exactly when a column or diagonal row of `Â` carries two set variables.
+
+Unlike graph colouring, a *single* annealed Boltzmann machine is a poor `n`-queens solver — `0/40`
+seeds settle on the empty `8 × 8` board, where the swarm of eq. (7) needs five outer iterations.
+So `#queens` (the swarm) is the one that answers the question and `#queensAt` (one anneal, one
+frame per sweep) is the one to press play on, on a board small enough that it settles.
+-/
+
+/-- `#queens classic8` — run the collaborative search on an `n`-Queens Completion QUBO and watch
+the board, one frame per outer iteration. -/
+macro "#queens " g:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Queens.animate $g)
+
+/-- `#queensFire small6` — watch one Boltzmann anneal, one frame per sweep, restarting until a run
+settles. Fine one at a time; use `#queensAt` in a file of widgets. -/
+macro "#queensFire " g:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Queens.fire $g)
+
+/-- `#queensAt small6 11` — the same on exactly that seed, with no restart search, so the cost is
+a single anneal. A separate command rather than an optional argument for the reason given at
+`#fireAt`: a bare second term would be swallowed by the first as an application. -/
+macro "#queensAt " g:ident s:num : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Queens.fireAt $g $s)
+
+/-- `#queensRefute blocked4` — a placement with no completion, on a small budget. That the
+failure *means* something is `QUBO.Queens.exists_zero_iff_queens`. -/
+macro "#queensRefute " g:term : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Queens.refute $g)
+
+/-! ### The live board
+
+Everything above replays a search that finished during elaboration. `#queensBoard` does not: it
+renders a board you click to place queens on, and each solver button calls back into the Lean
+**language server**, which runs the real `QUBO.search` / `QUBO.Queens.anneal` /
+`QUBO.Queens.Baseline.solve` and returns the frames. See `QUBO.Queens.Interactive`.
+
+Because it is served by the language server rather than baked in at elaboration, this widget costs
+nothing to *open* — the cost is paid per button press. -/
+
+/-- `#queensBoard` — an interactive `8 × 8` board; `#queensBoard 6` for another size. Click squares
+to build a partial placement, then press `anneal`, `swarm` or `backtrack`. -/
+macro "#queensBoard" : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Queens.Interactive.board)
+
+@[inherit_doc «command#queensBoard»]
+macro "#queensBoard " n:num : command =>
+  Lean.TSyntax.mkInfoCanonical' <$> `(#html QUBO.Queens.Interactive.board $n)

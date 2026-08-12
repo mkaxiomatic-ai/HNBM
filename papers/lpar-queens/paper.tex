@@ -496,14 +496,25 @@ what one machine can do is the last column of the table above.
 
 \begin{itemize}\itemsep2pt
 \item No claim of speed. See \secref{sec:meas}.
-\item No new algorithm, and no improvement on the neural-network literature for this problem.
-The search is~\citeref{liwang2022} unchanged. Mańdziuk~\citeref{mandziuk1995} solved $n$-queens
-thirty years ago with a binary Hopfield-type network --- the same $\{0,1\}$ state space we use ---
-in both synchronous and asynchronous modes, and reports convergence rates up to $100\%$ with
-polynomial average cost. Our solver does considerably worse than that, as \secref{sec:meas} shows.
-The difference is that his network is designed for $n$-queens, whereas ours is a general reduction
-to a network we had already formalized for other reasons, and the reduction is proved correct. What
-is new here is the proof, not the performance.
+\item No new algorithm, and no improvement on the neural-network literature for this problem. The
+search is~\citeref{liwang2022} unchanged. Mańdziuk~\citeref{mandziuk1995} solved $n$-queens thirty
+years ago with a binary Hopfield-type network over the same $\{0,1\}$ state space, using $N^2$
+neurons and no auxiliary variables, and reports a convergence rate of $100\%$ (once $99\%$) on
+boards of size $n = 4,8,16,32,48,64,80$, with the average number of outer iterations fitted by
+$2.82\,n^{0.67}$. On the boards where a comparison is meaningful --- the empty ones --- our
+population search is comparable to that up to $N = 8$, and it then falls away: we fail at $N = 10$
+where he succeeds at $N = 80$.
+
+We can point to three reasons, and none of them favours us. His update is a Hopfield update and
+therefore descends the energy at every step, which is why it converges; the recurrences we inherit
+from~\citeref{liwang2022} accumulate their input and have no descent property, as
+\secref{sec:net} explains. His encoding is built for this problem and needs $N^2$ neurons, whereas a
+generic reduction into $\lVert Ax-b\rVert^2$ costs us $N^2+4N-6$, the extra ones being slacks that
+carry no information but must still be got right. And the constants of \secref{sec:solver} were
+recovered on Sudoku, where the search is preceded by a propagation stage that has no analogue here.
+
+What is new in this paper is therefore the proof and not the performance, and a reader wanting an
+effective neurodynamic $n$-queens solver should use~\citeref{mandziuk1995} rather than this.
 \item The search is a heuristic, and we prove nothing about whether it succeeds. We prove that its
 positive answers are correct, and that its objective has a zero precisely when the board has a
 completion.

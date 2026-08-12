@@ -204,6 +204,24 @@ def runOne (I : Instance) (k seed : Nat) : SearchResult :=
       captureBoards := false, oneHotInit := true, groups := cellGroups J }
     (Rng.seed seed.toUInt64)
 
+/-- The same search driven by **DHNm, eq. (3)** rather than BMm.
+
+`Model.dhnm` is the hard-threshold recurrence with momentum and consumes no randomness at all, so
+the swarm's only stochasticity is initialisation, the PSO coefficients and mutation. The diversity
+threshold is DHNm's `0.9` rather than BMm's `0.4`; that model-specific split was recovered on
+Sudoku and reproduces here and on `n`-queens, which is what makes it a principled constant rather
+than a per-instance fit. -/
+def runOneD (I : Instance) (k seed : Nat) : SearchResult :=
+  let J := withPalette I k
+  search (problem J) Model.dhnm
+    { N := 20, M := 20, maxOuter := 60, model := benchModel, divThreshold := 0.9,
+      captureBoards := false, oneHotInit := true, groups := cellGroups J }
+    (Rng.seed seed.toUInt64)
+
+/-- DHNm successes over `n` seeds at palette `k`. -/
+def dhnmSolved (I : Instance) (k n : Nat) : Nat :=
+  (Array.range n).foldl (fun a i => if (runOneD I k (seed0 + i)).solved then a + 1 else a) 0
+
 /-- `(solved at seed0, outer at seed0, #solved over `n` seeds, total outer over `n` seeds)`. -/
 def runSeeds (I : Instance) (k n : Nat) : Bool × Nat × Nat × Nat :=
   let rs := (Array.range n).map fun i => runOne I k (seed0 + i)
@@ -234,6 +252,7 @@ def header : String :=
   lpad "graph" 10 ++ rpad "n" 3 ++ rpad "|E|" 5 ++ rpad "chi" 5 ++ rpad "D+1" 5
     ++ "  |" ++ rpad "grdy" 6 ++ rpad "ok" 4 ++ rpad "dsat" 6 ++ rpad "ok" 4
     ++ "  |" ++ rpad "vars" 6 ++ rpad "hit" 5 ++ rpad "out" 5 ++ rpad "s/k" 7 ++ rpad "avg" 7
+    ++ rpad "dhnm" 7
     ++ "  |" ++ rpad "vars" 6 ++ rpad "hit" 5 ++ rpad "out" 5 ++ rpad "s/k" 7 ++ rpad "avg" 7
 
 /-- One row of the main table. -/
@@ -248,6 +267,7 @@ def line (r : Row) : String :=
     ++ rpad (toString (countColours d)) 6 ++ rpad (yn (properAt r.I d)) 4
     ++ "  |" ++ rpad (toString (varsAt r.I r.chi)) 6 ++ rpad (yn s1) 5 ++ rpad (toString o1) 5
     ++ rpad s!"{k1}/{r.seeds}" 7 ++ rpad (mean2 t1 r.seeds) 7
+    ++ rpad s!"{dhnmSolved r.I r.chi r.seeds}/{r.seeds}" 7
     ++ "  |" ++ rpad (toString (varsAt r.I (r.chi + 1))) 6 ++ rpad (yn s2) 5
     ++ rpad (toString o2) 5 ++ rpad s!"{k2}/{r.seeds}" 7 ++ rpad (mean2 t2 r.seeds) 7
 
@@ -263,7 +283,8 @@ the stall criterion fired). -/
 def table : IO Unit := do
   IO.println
     s!"BMm, N=20, M=20, maxOuter=60, inner=40, T0=3.0, eta=0.9, oneHotInit, base seed {seed0}"
-  IO.println (lpad "" 46 ++ "  |" ++ lpad "  palette chi" 30 ++ "  |" ++ "  palette chi+1")
+  IO.println (lpad "" 46 ++ "  |" ++ lpad "  palette chi (BMm, then DHNm)" 37 ++ "  |"
+    ++ "  palette chi+1")
   IO.println header
   IO.println ("".pushn '-' header.length)
   for r in corpus do IO.println (line r)

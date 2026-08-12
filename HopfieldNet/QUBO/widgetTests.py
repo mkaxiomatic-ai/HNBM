@@ -225,9 +225,52 @@ if (FAIL > 0) throw new Error(FAIL + ' failures');
 '''
 
 
+BUILT = HERE.parents[1] / '.lake' / 'build' / 'lib' / 'lean' / 'HopfieldNet' / 'QUBO'
+OLEANS = [(PLAYER, BUILT / 'Widget.olean'),
+          (BOARD, BUILT / 'Instances' / 'Queens' / 'Interactive.olean')]
+
+
+def check_freshness():
+    """Verify the built widget modules carry the *current* JavaScript.
+
+    `include_str` bakes a file's contents into the .olean when the module is elaborated, but
+    editing that file does **not** invalidate lake's trace: lake replays the module and the
+    infoview keeps serving the old script.  This has bitten us twice, once presenting an
+    n-queens board as a Sudoku grid for an afternoon.  Nothing inside Lean can detect it --- a
+    guard in the same module is equally stale --- so it is checked from outside.
+
+    The .olean does not hold the file as one contiguous blob, so we check line by line, which is
+    what caught it: a single edited line goes missing while the rest still matches.
+    """
+    problems = []
+    for js, olean in OLEANS:
+        name = js.name
+        if not olean.exists():
+            problems.append(f'{name}: {olean.name} not built; run `lake build`')
+            continue
+        blob = olean.read_bytes()
+        lines = [ln for ln in js.read_bytes().split(b'\n') if len(ln.strip()) > 40]
+        missing = [ln for ln in lines if ln not in blob]
+        if missing:
+            problems.append(
+                f'{name}: {len(missing)}/{len(lines)} substantial lines are absent from '
+                f'{olean.name} -- it was built from an older copy.\n'
+                f'      first missing: {missing[0].strip().decode("utf-8", "replace")[:90]}\n'
+                f'      fix: rm {olean} && lake build '
+                f'HopfieldNet.QUBO.Instances.Queens.Gallery')
+        else:
+            print(f'  fresh  {name} matches {olean.name} ({len(lines)} lines checked)')
+    return problems
+
+
 def main():
     if not pathlib.Path(JSC).exists():
         raise SystemExit('JavaScriptCore not found; these tests need macOS jsc')
+
+    print('--- the built widget modules carry the current JavaScript ---')
+    stale = check_freshness()
+    for p in stale:
+        print('  FAIL  ' + p)
     harness = (
         STUBS
         + wrap(BOARD, 'QB', 'App', ['frameCols', 'attacks', 'QueenPiece', 'Board', 'App'])
@@ -246,7 +289,7 @@ def main():
         sys.stdout.write(r.stdout)
         if r.stderr.strip():
             sys.stderr.write(r.stderr)
-        return r.returncode
+        return r.returncode or (1 if stale else 0)
     finally:
         out.unlink(missing_ok=True)
 

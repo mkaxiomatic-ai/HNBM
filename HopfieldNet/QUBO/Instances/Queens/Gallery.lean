@@ -99,6 +99,25 @@ def b6 : Instance := blocked6
 /-- Two givens already attacking. Blocked — `attacking_no_queens` is a theorem. -/
 def bx : Instance := attacking
 
+/-! ### The pinned seeds are checked, not trusted
+
+Each `#queensAt` below is pinned to a seed on which one annealed run happens to settle. Those
+seeds are fragile: they depend on the board, the schedule, and the *exact* temperature. When the
+`2·T₀` correction was made to `Queens.Widget.anneal` all three silently stopped settling, and the
+gallery began showing stalled boards with no indication that anything had changed --- the widgets
+still rendered, they just rendered failure.
+
+`#guard` errors during elaboration when its argument is not `true`, unlike a `#eval` that prints
+`false` and is scrolled past. So opening this file now *fails* rather than misleads if a seed stops
+working. The schedule below must stay in step with `fireAt`'s. -/
+private def settlesAt (I : Instance) (seed : Nat) : Bool :=
+  let (x0, g) := randomStart I (Rng.seed seed.toUInt64)
+  I.isQueens (I.decode (anneal (problem I) 2000 2.0 0.998 g x0).back!)
+
+#guard settlesAt q5 9
+#guard settlesAt g6 11
+#guard settlesAt g8 5
+
 end Gallery
 end Queens
 end QUBO

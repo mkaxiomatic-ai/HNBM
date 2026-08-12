@@ -114,6 +114,32 @@ tabulate, so omitting it here would have made this table both wrong and incompar
 def benchModel : ModelConfig :=
   ModelConfig.tabulate { innerIters := 40, levels := 64, T0 := 3.0, eta := 0.9 }
 
+/-! ### The temperature convention, guarded
+
+The two checks below exist because getting this wrong cost two full re-runs of this file. `#guard`
+errors during elaboration when its argument is not `true`, so neither can be overlooked the way a
+printed `#eval` can.
+
+The first says the logistic table was actually built. Forgetting `ModelConfig.tabulate` does not
+fail, it silently switches every run onto the `Float` fallback in `bmmRun` --- and that fallback
+divides the accumulated net input by `T` where the table divides by `2T`, because
+`Problem.netVec` returns *twice* the local field. An untabulated run at nominal `T₀` therefore
+anneals from `T₀/2`, and the table above would report a temperature it never used.
+
+The second states that discrepancy as an equation and checks it: a tabulated run at `T₀` is
+bit-identical to an untabulated run at `2·T₀`. If someone ever repairs the fallback, this guard
+fails and points at the place the convention is documented. -/
+
+#guard benchModel.sigTable.size == benchModel.levels * uSpan
+
+#guard
+  let P := problem (empty 4)
+  let x0 : Array Bool := Array.replicate P.nvars false
+  let g := Rng.seed 7
+  let tabulated := ModelConfig.tabulate { innerIters := 20, levels := 32, T0 := 3.0, eta := 0.9 }
+  let doubled : ModelConfig := { innerIters := 20, levels := 32, T0 := 6.0, eta := 0.9 }
+  (bmmRun P tabulated 0 g x0).1 == (bmmRun P doubled 0 g x0).1
+
 /-- Base seed. Fixed, so the table is reproducible. -/
 def seed0 : Nat := 20260806
 

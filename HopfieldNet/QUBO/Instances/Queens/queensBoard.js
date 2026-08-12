@@ -90,7 +90,8 @@ function attacks(cols, n) {
   for (let i = 0; i < n; i++) {
     for (let k = i + 1; k < n; k++) {
       const a = cols[i], b = cols[k]
-      if (a === null || b === null) continue
+      if (a == null || b == null) continue   // == catches undefined too: a short `cols`
+                                             // array must not read as a row full of queens
       if (a === b || i - a === k - b || i + a === k + b) pairs.push([i, k])
     }
   }

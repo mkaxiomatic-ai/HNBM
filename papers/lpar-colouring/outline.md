@@ -20,8 +20,11 @@ against it which of the results below are already stated there versus new here.
 
 What this paper adds, and the whole of what it claims:
 
-1. that the formalised library is **reusable** — a second problem domain costs an encoding and a
-   decoder, not a second development;
+1. that the formalised library is **reusable** — a new problem domain costs an encoding and a
+   decoder, not a second development. The evidence is three domains, not one: graph colouring,
+   exact cover, and `n`-Queens Completion, plus edge colouring by a definitional reduction to the
+   line graph. Queens is the load-bearing one, because it is the instance whose odd column degrees
+   the library's degree-free algebra is exercised hardest by (degrees 4, 3 and 1, two of them odd);
 2. a graph colourer whose encoding is proved faithful **in both directions**, so its negative
    answers mean something;
 3. that the *running* solver is the network the theorems are about, not a lookalike;
@@ -77,6 +80,15 @@ hypothesis a reader assumes is hiding something.
 | The energy gap is ≥ ½ (the objective is integer-valued) | `QUBO.Problem.half_le_energy_sub_min` | ✓ |
 | Infeasible states are Boltzmann-suppressed by `exp(−1/2T)` → 0 | `boltzmann_ratio_le`, `tendsto_suppression` | ✓ |
 | Edge colouring, by reduction to the line graph | `EdgeColouring.isColouring_lineGraph` (`rfl`), `decode_isProperEdgeColouring` | ✓ |
+| **n-Queens Completion**: well-formed QUBO, refines the incidence | `Queens.problem_wf`, `Queens.problem_refines` | ✓ |
+| Soundness: `p(x) = 0` → the decoded board is a completion | `Queens.decode_isQueens` | ✓ |
+| Completeness: a completion encodes to `p = 0` | `Queens.encode_penalty_zero` | ✓ |
+| Decision equivalence, hypothesis `givensOk` only | `Queens.exists_zero_iff_queens` | ✓ |
+| Blocked boards, about the *board*: `¬ ∃ q, isQueens q` | `Queens.blocked4_no_queens`, `blocked6_no_queens`, `Bench.blk7_no_queens` | ✓ |
+| The energy minimisers are **exactly** the completions | `Queens.exists_minEnergy_iff` | ✓ |
+| The Gibbs equilibrium law concentrates on the completions | `Queens.classic8_stationary_infeasible_tendsto_zero` | ✓ |
+| Descent terminates on the queens network | `Queens.classic8_exists_stable` | ✓ |
+| The backtracking baseline is sound | `Queens.Baseline.solve_isQueens` | ✓ |
 
 The last row is worth a paragraph of its own: the reduction is arranged so that the two checkers
 are *definitionally* equal, because `adjPairs` serves both as `L(G)`'s edge list and as what
@@ -99,12 +111,55 @@ say so explicitly, and give the variable count: `n(N + |E|)` against his `nN`.
 
 Two honest notes for this section:
 
-* the encoding writes every row twice, so column degrees come out even. That was forced by
-  `theta : Array Int` storing `θ̂ = ½·deg(u) − Σ b̂`, which is a half-integer at odd degree. Since
-  `theta` is now stored doubled (`QUBO.Problem.toyOdd` is the witness) the duplication is
-  removable — **TODO**, and until then the reported row counts are 2× the natural ones;
-* colour variables have degree `2(1 + deg_G(v))` and slacks degree `2`, so this instance exercises
-  the degree-free algebra hard. Sudoku, at constant degree 4, never did.
+* the encoding used to write every row twice, so that column degrees came out even. That was
+  forced by `theta : Array Int` storing `θ̂ = ½·deg(u) − Σ b̂`, a half-integer at odd degree.
+  **This is now fixed and the duplication is gone** (commit `746677e`, "QUBO: store theta doubled,
+  removing the even-degree restriction"); `theta` holds `2θ̂` and `thetaR` halves it. Row counts and
+  penalty values in §5 are the natural ones. `QUBO.Problem.toyOdd` is the minimal odd-degree witness;
+* colour variables therefore have degree `1 + deg_G(v)` and slacks degree `1`. Note for §3.1: it was
+  **colouring**, not queens, that prompted the doubled `theta` — queens is simply the instance that
+  exercises the resulting degree-free algebra hardest (degrees 4, 3, 1, two of them odd) and that
+  arises from a board rather than from a synthetic test. Do not claim queens forced the change.
+
+### 3.1 The second encoding: `n`-Queens Completion
+
+The reuse claim is only worth making if the second instance is not a variation on the first, and
+this one is not. Given an `N × N` board and a partial placement, can it be extended to a full
+solution? **NP-complete and #P-complete** — Gent, Jefferson & Nightingale, JAIR **59** (2017),
+815–848. The *completion* variant matters: plain `n`-queens has a closed-form solution for every
+`N ≥ 4`, so its decision equivalence would be vacuous.
+
+One variable per cell, and every constraint is an equality or an at-most-one:
+
+| constraint | count | row |
+|---|---|---|
+| one queen per board row | `N` | `Σⱼ x_{i,j} = 1` |
+| one per column | `N` | `Σᵢ x_{i,j} = 1` |
+| ≤ 1 per diagonal of length ≥ 2 | `2N−3` | `Σ x + s_d = 1` |
+| ≤ 1 per anti-diagonal of length ≥ 2 | `2N−3` | `Σ x + s_a = 1` |
+| each given queen | `#givens` | a one-variable row, `b̂ = 1` |
+
+so `nvars = N² + 4N − 6` and `nrows = 6N − 6 + #givens`.
+
+Three points worth a paragraph each:
+
+* **One binary slack per diagonal expresses at-most-one, regardless of the diagonal's length.**
+  If `Σx = 0` then `s = 1`; if `Σx = 1` then `s = 0`; if `Σx ≥ 2` the residual is at least one and
+  is penalised. So no new `Problem` field was needed — an earlier analysis had queens costing an
+  at-most-one row *kind*, and it does not.
+* **`b̂ ≡ 1` throughout, so `θ̂_u = −deg(u)`.** Degrees here are `4` (interior cell), `3` (a cell on
+  a length-one corner diagonal), and `1` (a slack) — *two of them odd*. This is the instance that
+  makes the doubled-`theta` field load-bearing rather than merely tidy: a halved threshold could
+  not represent it. Colouring, with its even degrees, never forced the issue.
+* **Pinning givens as one-variable rows** avoids any reduction machinery: `Problem.base` stays
+  empty and the givens are ordinary constraints.
+
+The decision equivalence carries **one** hypothesis, `givensOk` — every given queen on the board —
+and no lower bound on `N`. The degenerate boards are discharged, not excluded: at `N = 0` the
+objective is vacuously zero and the empty board is vacuously a completion, and `givensOk` is
+exactly what rules out the one bad case, an off-board given whose row would contain no variable at
+all. Diagonals are indexed additively (`i + N = e + 2 + j`, `i + j + D = e + 1`) so no truncated
+`Nat` subtraction appears anywhere and the bounds on `e` *are* the "length ≥ 2" condition.
 
 ## 4. The solver (§4)
 
@@ -206,7 +261,18 @@ State these plainly rather than letting a referee find them:
   undamped accumulators, are not `Up` of any HNBM network, and no theory covers them —
   Goles–Chacc and Little–Peretto do not apply. Everything proved here concerns the memoryless
   single-site reading;
-* the slack encoding is equivalent to, not identical to, Lucas §6.1.
+* the slack encoding is equivalent to, not identical to, Lucas §6.1;
+* **for queens, no completeness claim about the classical baseline.** `Baseline.solve_isQueens`
+  proves every board the backtracking search returns is a genuine completion; it does *not* prove
+  that returning `none` means none exists. The search is exhaustive by construction, but that is
+  an argument about the code, not a theorem about it, so the blocked instances are refuted
+  separately by kernel enumeration wherever the board is small enough and are marked as
+  observations otherwise. The `cert` column of §5's second table draws that line explicitly;
+* nothing is claimed about *annealing schedules*. `Queens.classic8_stationary_infeasible_tendsto_zero`
+  is a limit of the equilibrium law at temperature `T` as `T → 0⁺`; it says nothing about how
+  slowly `T` must fall for a run at a moving temperature to track that equilibrium. This matters
+  precisely because the measured single-anneal results are poor — the theorem explains why that is
+  a schedule problem rather than an encoding problem, and it must not be read as a fix.
 
 ## 8. Related work
 
@@ -238,9 +304,25 @@ and move on.
 
 ## 9. Open items before submission
 
-1. Remove the row duplication — §3. The reported `vars` counts are 2× the natural ones.
-2. Regenerate the results table once the row duplication is gone — row counts and penalty values
-   both halve — and give Myc3 more than three seeds while doing it.
+Status as of 2026-08-11.
+
+1. ~~Remove the row duplication — §3.~~ **Done.** `theta` is stored doubled, the parity condition
+   is gone, and `Colouring.lean` no longer writes each row twice (see its "Why the rows are *not*
+   doubled"). The queens encoding never duplicated.
+2. **Regenerate the colouring results table.** The §5 table still predates the duplication
+   removal; row counts and penalty values halve, and the success/failure pattern should be
+   unaffected, but it must be re-run rather than assumed. Give Myc3 more than three seeds while
+   doing it. *This is now the only stale measurement in the paper.*
+3. **Fill in §0's TODO**: the accepted LPAR paper's title, authors and citation, and a check of
+   which results below are already stated there.
+4. **Artifact hygiene**, all three currently unaddressed:
+   * `MCMC/Gibbs.lean` carries **22 `sorry`s** — the only ones in the repository. Fence the module
+     or drop it from the artifact; a reviewer running `#print axioms` on a neighbouring file will
+     find it.
+   * `HopfieldNet/QUBO/Converge.lean` and `Gibbs.lean` are untracked and were never in any build
+     until 2026-08-11, yet they carry the concentration results §2 cites. Commit them.
+   * `lakefile.lean` now requires `CertifiedReals` at `@ "main"`. Pin a tag before the artifact
+     is fetched by anyone.
 5. Decide the fate of the Sudoku reproducibility material. It is the strongest self-contained
    story in the repository (the paper states no `W`, no `θ` and no hyperparameter; two recovered
    constants decide success; Table I is now a theorem; proving it caught real specification bugs)

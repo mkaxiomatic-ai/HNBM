@@ -1,0 +1,553 @@
+% LPAR-26 short presentation paper (Kalpa Publications).
+% NOTE: copy `easychair.cls` and `lstlean.tex` from the main paper's directory next to this file.
+\documentclass{easychair}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{csquotes}
+\usepackage{tikz}
+\usepackage{cleveref}
+\usepackage{fontawesome}
+
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{theorem}[thm]{Theorem}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{lemma}[thm]{Lemma}
+
+\definecolor{academicpurple}{rgb}{0.4,0.0,0.35}
+\newcommand{\secref}[1]{\hyperref[#1]{\textcolor{academicpurple}{\S\ref*{#1}}}}
+\newcommand{\citeref}[1]{\textcolor{academicpurple}{\cite{#1}}}
+\newcommand{\thmref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Theorem~\ref*{#1}}}}
+\newcommand{\extlink}{~\ensuremath{{}^\text{\faExternalLink}}}
+
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1}
+\definecolor{codebg}{rgb}{0.96,0.96,0.99}
+\definecolor{codeframe}{rgb}{0.75,0.70,0.80}
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean,
+  basicstyle=\fontsize{8.4}{9.8}\selectfont\ttfamily,
+  backgroundcolor=\color{codebg},
+  frame=single, framerule=0.5pt, rulecolor=\color{codeframe},
+  framesep=4pt, xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=4pt, belowskip=4pt}
+
+\title{A Certified Encoding of $n$-Queens Completion\\ as a Hopfield/Boltzmann Network}
+
+\titlerunning{A Certified Encoding of $n$-Queens Completion}
+
+\author{
+Matteo Cipollina\inst{1}
+\and
+Michail Karatarakis\inst{2}
+\and
+Freek Wiedijk\inst{2}
+}
+
+\institute{
+  Axiomatic AI, Barcelona, Spain\\
+  \email{matteo.cipollina@yahoo.it}
+\and
+  Radboud University, Nijmegen, The Netherlands\\
+  \email{michail.karatarakis@ru.nl, freek@cs.ru.nl}\\
+}
+
+\authorrunning{Cipollina, Karatarakis and Wiedijk}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+In our LPAR-26 paper we formalized Hopfield networks and Boltzmann machines in Lean~4, and remarked
+in passing that minimizing a Hopfield energy is the same thing as quadratic unconstrained binary
+optimization. This paper works out that remark. We formalize a class of optimization problems in the
+form $\lVert A x - b\rVert^2$, prove that each one is a Boltzmann network whose lowest-energy states
+are exactly its solutions, and use this to encode $n$-Queens Completion: given a chessboard with
+some queens already placed, can the placement be extended so that no two queens attack each other?
+We prove the encoding correct in both directions. The second direction is the useful one: it means
+that when the solver reports that no solution exists, that report is a theorem about the chessboard
+and not a failure of the search. We give a $7 \times 7$ board with two given queens that do not
+attack each other and that admits no completion, and we prove that it admits none.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+
+Our LPAR-26 paper~\citeref{hnbm} formalizes Hopfield networks and Boltzmann machines in Lean~4. In
+its introduction we note that minimizing the energy of a Hopfield network is, after an affine change
+of variables, the problem known as quadratic unconstrained binary optimization
+(QUBO)~\citeref{lucas2014ising}, and that a machine-checked account of the dynamics would give a
+specification against which algorithms running on annealing hardware could be verified. We did not
+carry that out. This paper carries it out for one problem.
+
+The plan is as follows. We fix a class of constraint problems and give them a numerical objective
+function which is zero exactly on the solutions (\secref{sec:qubo}). We show that the objective is
+the energy of a Boltzmann network of~\citeref{hnbm}, so that solving the constraint problem and
+minimizing the energy of the network are the same task (\secref{sec:net}). We then encode a
+particular \textsf{NP}-complete problem in this form and prove that the encoding is faithful
+(\secref{sec:queens}--\secref{sec:correct}). Finally we run the neurodynamic solver of Li and
+Wang~\citeref{liwang2022} on it and report what happens (\secref{sec:solver}--\secref{sec:meas}).
+
+We should say at the outset what is \emph{not} being claimed. We do not claim that the resulting
+solver is fast; a short backtracking program beats it on every instance we tried, and we give the
+numbers. We do not claim any new algorithm; the solver is Li and Wang's, used unchanged. What is new
+is that the translation from the chessboard to the network is proved correct, in both directions,
+and that the solver's negative answers therefore mean something.
+
+\section{Constraint problems as sums of squares}\label{sec:qubo}
+
+We begin with the class of problems we can handle, and we begin concretely.
+
+Suppose we have $n$ Boolean unknowns $x_1,\dots,x_n$, each either $0$ or $1$, and $m$ constraints,
+each of which says that a certain subset of the unknowns must contain exactly one $1$. Write $A$ for
+the $m \times n$ matrix whose entry $A_{r,u}$ is $1$ if unknown $u$ occurs in constraint $r$ and $0$
+otherwise, and write $b$ for the column vector of $m$ ones. Then the constraint \enquote{row $r$
+contains exactly one $1$} says precisely that the $r$-th entry of $Ax$ equals the $r$-th entry
+of~$b$. Solving all the constraints at once is solving the linear system $Ax = b$ over $\{0,1\}$.
+
+Rather than solve the system, we measure how badly a given $x$ fails to solve it. Define
+\begin{equation}\label{eq:p}
+  p(x) \;=\; \lVert Ax - b\rVert^2 \;=\; \sum_{r=1}^{m}\Bigl(\ \sum_{u \in r} x_u \;-\; b_r\ \Bigr)^{\!2}.
+\end{equation}
+Each summand is the square of an integer, so $p(x) \ge 0$ always, and $p(x) = 0$ if and only if
+every constraint is met exactly. We call $x$ \emph{feasible} when $p(x) = 0$. Minimizing $p$ is
+therefore the same as solving the constraints, and $p$ is a quadratic polynomial in Boolean
+variables, which is what makes the connection to Hopfield energies in \secref{sec:net} possible.
+
+Two observations about \eqref{eq:p} will be used repeatedly, and both are easy.
+
+\begin{lemma}[integrality]\label{lem:int}
+$p(x)$ is a non-negative integer for every $x$, so if $p(x) \neq 0$ then $p(x) \ge 1$.
+\end{lemma}
+
+There is no state whose objective value is a small positive fraction. A search either lands exactly
+on a solution or misses by at least a whole unit. We will see this in the measurements of
+\secref{sec:meas}, where every failed run on an unsolvable instance stops at exactly $1$.
+
+\begin{lemma}[at-most-one by a slack variable]\label{lem:slack}
+Let $S$ be a set of unknowns and let $s$ be a fresh Boolean unknown. Then the constraint
+$\sum_{u \in S} x_u + s = 1$ is satisfiable if and only if $\sum_{u \in S} x_u \le 1$, and in that
+case $s$ is determined: $s = 1 - \sum_{u\in S} x_u$.
+\end{lemma}
+
+This is the only trick we need in order to express \enquote{at most one} in a language that only has
+\enquote{exactly one}. If nothing in $S$ is set, $s$ takes up the slack and is set instead. If
+exactly one thing in $S$ is set, $s$ is $0$. If two or more are set, no value of $s$ works, the row
+contributes at least $1$ to \eqref{eq:p}, and the assignment is penalized. Note that a single slack
+suffices however large $S$ is; we do not need one slack per pair.
+
+\medskip\noindent\textbf{Which problems fit.} The form \eqref{eq:p} accepts exactly the
+\emph{feasibility} problems whose constraints are equalities, possibly after adding slack variables
+as in \cref{lem:slack}. Consulting the standard catalogue~\citeref{lucas2014ising}: exact cover
+(\S4.1 there) fits with no slack variables at all; graph colouring (\S6.1) fits after one slack per
+edge and colour, which gives a problem equivalent to, though not literally identical with, the
+Hamiltonian given there, whose conflict term is a bare product $x_u x_v$ rather than a squared
+residual. Optimization problems such as vertex cover (\S4.3) and the travelling salesman (\S7.2) do
+not fit, because they ask for a \emph{best} solution rather than for \emph{any} solution, and
+\eqref{eq:p} has no way to express a preference among feasible points. We say this because it
+delimits the method: what follows applies to a restricted class, and it is better to be explicit
+about which.
+
+The catalogue does not include $n$-queens, in any of its sections. The encoding of
+\secref{sec:enc} is therefore not a transcription of a published Hamiltonian but one we
+constructed, which is a further reason to prove it correct rather than to assume it.
+
+\medskip\noindent\textbf{In Lean.} The data above is a structure we call \lstinline{Problem}. It
+stores the number of unknowns and rows, the matrix $A$ column-wise (for each unknown, the list of
+rows it occurs in), the vector $b$, and two derived quantities that \secref{sec:net} needs. Nothing
+in it mentions any particular application; graph colouring, exact cover, Sudoku and the queens
+problem of this paper are all values of this one structure.
+
+\section{The problem: $n$-Queens Completion}\label{sec:queens}
+
+A queen on a chessboard attacks along its row, its column, and both diagonals. The classical
+$n$-queens problem asks for a placement of $N$ queens on an $N \times N$ board, no two attacking. It
+is a familiar puzzle, and for our purposes it has a fatal defect: it is solvable for \emph{every}
+$N \ge 4$, by a closed-form construction. A theorem of the shape \enquote{the encoding has a
+solution if and only if the board does} would therefore be true but empty, since both sides are
+always true.
+
+We use instead the completion variant.
+
+\begin{definition}[$n$-Queens Completion]\label{def:completion}
+An instance is a board size $N$ together with a finite list of \emph{givens}, that is, squares
+$(i,j)$ on which a queen has already been placed. The instance is a \textsf{yes} instance when there
+is a placement of $N$ mutually non-attacking queens, one in each row, that includes every given.
+\end{definition}
+
+This variant is \textsf{NP}-complete, and counting its solutions is $\#\textsf{P}$-complete
+\citeref{gent2017}. It is also much better behaved as a test of an encoding, because whether an
+instance is solvable genuinely depends on the givens, and one cannot tell by inspection. Our corpus
+contains a $7 \times 7$ board whose two given queens are on different rows, different columns and
+different diagonals --- they do not attack each other, so nothing is locally wrong --- and which
+nevertheless admits no completion at all.
+
+It is worth seeing how quickly this becomes non-obvious. A queen in the corner square $(0,0)$ is
+fatal on a $4 \times 4$ board and on a $6 \times 6$ board, and harmless on every other size we
+checked: counting the completions of $\langle n, \{(0,0)\}\rangle$ for $n = 4,\dots,10$ gives
+$0,\,2,\,0,\,4,\,4,\,28,\,64$.
+
+We represent a board as an array $q$ of $N$ natural numbers, where $q_i$ is the column of the queen
+in row $i$. Placing one queen per row is then built into the representation, and the remaining
+conditions are checked by a Boolean function \lstinline{isQueens}: that $q$ has length $N$, that
+every entry is less than $N$, that no two rows share a column or a diagonal, and that every given is
+present.
+
+\medskip\noindent\textbf{Diagonals without subtraction.} Two queens at $(i,q_i)$ and $(k,q_k)$ share
+a diagonal when $i - q_i = k - q_k$, and an anti-diagonal when $i + q_i = k + q_k$. The first of
+these involves a subtraction, and in Lean subtraction on $\mathbb{N}$ is truncated: $2 - 5$ is $0$,
+not $-3$. Writing the condition that way would force a case distinction, or a move to $\mathbb{Z}$,
+at every use. We therefore rearrange it to $i + q_k = k + q_i$, which is equivalent over the
+integers and involves only addition. The same rearrangement is used throughout the encoding below.
+It is a small point, but it removes a great deal of case analysis, and it is the kind of thing that
+is invisible on paper and unavoidable in a formalization.
+
+\section{The encoding}\label{sec:enc}
+
+We now write $n$-Queens Completion in the form of \secref{sec:qubo}. Take one Boolean unknown
+$x_{i,j}$ for each square, to be read as \enquote{there is a queen on square $(i,j)$}. The
+conditions of \cref{def:completion} become the following rows.
+
+\begin{center}\small
+\begin{tabular}{@{}llc@{}}
+\toprule
+condition & row & how many\\
+\midrule
+row $i$ holds exactly one queen & $\sum_j x_{i,j} = 1$ & $N$\\
+column $j$ holds exactly one queen & $\sum_i x_{i,j} = 1$ & $N$\\
+diagonal $d$ holds at most one & $\sum_{(i,j) \in d} x_{i,j} + s_d = 1$ & $2N-3$\\
+anti-diagonal $a$ holds at most one & $\sum_{(i,j) \in a} x_{i,j} + s_a = 1$ & $2N-3$\\
+the given at $(i,j)$ is present & $x_{i,j} = 1$ & one per given\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The first two families are equalities already. The diagonal families are at-most-one conditions, and
+we express them using \cref{lem:slack}, with one fresh slack variable per diagonal. The givens are
+rows containing a single unknown, whose only solution is to set it; this is why we need no separate
+mechanism for fixing variables in advance.
+
+Only diagonals of length at least two are given rows. A diagonal consisting of a single square
+cannot contain two queens, so the condition on it is vacuous, and a row for it would contain one
+unknown and one slack and would say nothing. On an $N \times N$ board there are $2N-1$ diagonals in
+each direction, of which the two extreme ones are single corner squares; hence $2N-3$ rows in each
+direction. Counting up,
+\[
+  \#\text{unknowns} = N^2 + 2(2N-3) = N^2 + 4N - 6,
+  \qquad
+  \#\text{rows} = 2N + 2(2N-3) + \#\text{givens} = 6N - 6 + \#\text{givens}.
+\]
+For the ordinary $8 \times 8$ board this is $90$ unknowns and $42$ rows.
+
+\medskip\noindent\textbf{A worked instance.} Take $N = 4$ with one given queen at the corner
+$(0,0)$. There are $16$ square unknowns and $2 \times 5 = 10$ slacks, so $26$ in all; and
+$4 + 4 + 5 + 5 = 18$ rows, plus one more for the given, so $19$. This instance has no completion:
+the $4 \times 4$ board has exactly two solutions, $(1,3,0,2)$ and $(2,0,3,1)$, and neither places a
+queen in column $0$ of row $0$. We return to it in \secref{sec:correct}.
+
+\medskip\noindent\textbf{The degrees are uneven, and this matters.} In \secref{sec:net} the network
+attached to a \lstinline{Problem} has a threshold $\theta_u$ at each unknown $u$, given by
+$\theta_u = \tfrac{1}{2}\deg(u) - \sum_{r \ni u} b_r$, where $\deg(u)$ is the number of rows
+containing $u$. In our encoding every $b_r$ is $1$, so the sum is just $\deg(u)$ and
+$\theta_u = -\tfrac{1}{2}\deg(u)$.
+
+Counting degrees: a square in the middle of the board occurs in four rows --- its board row, its
+column, its diagonal and its anti-diagonal. Each of the four corner squares lies on a diagonal of
+length one, which carries no row, so it occurs in only three. A slack occurs in exactly one. Hence
+three distinct degrees, $4$, $3$ and $1$, two of them odd, and correspondingly
+$\theta_u \in \{-2,\,-1.5,\,-0.5\}$.
+
+Half-integer thresholds are unproblematic for the network of~\citeref{hnbm}, whose $\theta$ is
+real-valued. They are a problem for us only because we want the solver's inner loop to run in exact
+integer arithmetic, and so store $\theta$ in an integer array. An earlier version of the library did
+store $\theta$ itself, and kept every degree even by writing each constraint twice, which doubled the
+number of rows, the objective value and the work per sweep. That workaround was removed by storing
+$2\theta_u$, which is an integer whatever the degrees are, and halving it at the single point where
+the real-valued energy is defined. Sudoku, where every unknown has degree exactly four, would never
+have prompted this. We report the queens degrees because they exercise the resulting degree-free
+algebra harder than any other instance we have: three different values, two of them odd, arising
+from the geometry of the board rather than from a synthetic test case.
+
+\section{The encoding is faithful}\label{sec:correct}
+
+Two functions connect boards and assignments. Given a board $q$, the function \lstinline{encode}
+produces the assignment that sets $x_{i,j}$ exactly when $q_i = j$, and sets each slack to the value
+forced by \cref{lem:slack}. Given an assignment $x$, the function \lstinline{decode} reads off, for
+each row $i$, the first column $j$ with $x_{i,j}$ set.
+
+\begin{thm}\label{thm:iff}
+Suppose every given queen lies on the board. Then:
+\begin{enumerate}
+\item[(i)] (soundness) if $p(x) = 0$ then \lstinline{isQueens (decode x)} holds;
+\item[(ii)] (completeness) if \lstinline{isQueens q} holds then $p(\texttt{encode } q) = 0$;
+\item[(iii)] consequently $\bigl(\exists x.\; p(x) = 0\bigr) \iff \bigl(\exists q.\;
+      \texttt{isQueens } q\bigr)$.
+\end{enumerate}
+\end{thm}
+
+The hypothesis is the only one. In particular there is no lower bound on $N$. We did not exclude the
+degenerate boards but discharged them: when $N = 0$ there are no unknowns and no rows, so $p$ is the
+empty sum and is zero, and the empty board is vacuously a completion, so both sides of (iii) hold.
+The one case that must be excluded is a given lying off the board, because the row for such a given
+would contain no unknown at all and could never be satisfied; the hypothesis is exactly what rules
+this out. We are explicit about this because a reader is entitled to suspect that a side condition
+of the form \enquote{assume the board is non-empty} is concealing something.
+
+\medskip\noindent\textbf{Why the second direction is the interesting one.} Soundness says that when
+the solver reports a zero, the board it produces is a genuine solution. That is reassuring, but one
+could get the same assurance by checking the answer afterwards, which is cheap. Completeness says
+something a checker cannot: that if there had been a solution, the objective would have had a zero.
+Contrapositively, if the objective has no zero, there is no solution. So a run that ends without
+finding anything is evidence about the chessboard rather than about the search, and statements like
+the following become available.
+
+\begin{center}\small
+\begin{tabular}{@{}lllc@{}}
+\toprule
+instance & board and givens & why it is blocked & size of the check\\
+\midrule
+\texttt{attacking} & $8\times8$; $(0,0),(1,1)$ & the givens share a diagonal & none needed\\
+\texttt{blocked4}  & $4\times4$; $(0,0)$ & a corner queen is fatal at $N=4$ & $4^3 = 64$\\
+\texttt{blocked6}  & $6\times6$; $(0,0)$ & and at $N=6$ & $6^5 = 7776$\\
+\texttt{blocked7}  & $7\times7$; $(0,0),(1,6)$ & the givens do \emph{not} attack & $7^5 = 16807$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each of these is a theorem of the form $\neg\,\exists q.\ \texttt{isQueens}\ q$, that is, a statement
+about chessboards, with no mention of the encoding. They are proved by exhausting the possibilities
+that the givens leave open: the checker looks only at the first $N$ entries of the array, so a
+hypothetical completion is one of finitely many tuples, and the givens pin some coordinates. The
+enumeration is performed by the Lean kernel (\lstinline{decide +kernel}); we do not use
+\lstinline{native_decide} anywhere, so no compiler or runtime is part of the trusted base. By
+\thmref{thm:iff}(iii) each then upgrades to the statement that no assignment whatsoever reaches
+$p = 0$ --- a claim about $2^{71}$ assignments in the case of \texttt{blocked7}, obtained from a
+check over $16807$ tuples.
+
+\section{The objective is the energy of a Boltzmann network}\label{sec:net}
+
+We now connect \secref{sec:qubo} to~\citeref{hnbm}. A Hopfield energy has the shape
+$-\tfrac{1}{2}\sum_{u \neq v} W_{uv}\,x_u x_v + \sum_u \theta_u x_u$, with $W$ symmetric and zero on
+the diagonal. Expanding \eqref{eq:p} gives $p(x) = x^{\top}\!A^{\top}\!A\,x - 2b^{\top}\!Ax +
+\lVert b\rVert^2$, which is quadratic but has a diagonal: the term $(A^{\top}A)_{uu}x_u^2$. Since
+$x_u$ is Boolean we may replace $x_u^2$ by $x_u$, which turns that term into a linear one and lets
+it be absorbed into the threshold. What is left off the diagonal is symmetric and vanishes on it.
+Setting $W = -(A^{\top}A - \operatorname{diag}(A^{\top}A))$ and folding the rest into $\theta$ gives
+the following.
+
+\begin{thm}\label{thm:net}
+For any \lstinline{Problem}: the energy of the associated $\{0,1\}$ Boltzmann network
+of~\citeref{hnbm} at the state corresponding to $x$ equals
+$\tfrac{1}{2}\bigl(p(x) - \lVert b\rVert^2\bigr)$. Hence a state has minimum energy
+$-\tfrac{1}{2}\lVert b\rVert^2$ exactly when $p(x) = 0$, and by \cref{lem:int} every state that is
+not feasible has energy at least $\tfrac{1}{2}$ above the minimum.
+\end{thm}
+
+The energy gap of $\tfrac{1}{2}$ is worth isolating. Because the state space is finite and the gap
+does not shrink, the Boltzmann weight $e^{-E/T}$ of an infeasible state is smaller than that of a
+feasible one by a factor of at least $e^{-1/2T}$, which tends to $0$ as the temperature $T$ falls.
+Combining this with the ergodicity result of~\citeref{hnbm} --- which says that the random-scan Gibbs
+chain has a unique stationary distribution, namely the Boltzmann law --- gives that the chain's
+equilibrium distribution concentrates on the solutions as $T \to 0^{+}$. At the queens instance we
+also prove the converse pairing, that the minimum-energy states are exactly the completions, in both
+directions.
+
+\medskip\noindent\textbf{Where the certification stops.} We are careful to distinguish three things.
+The \emph{objective} is the network's energy, by \thmref{thm:net}. The \emph{quantity computed in
+the solver's inner loop} is the network's local field: the solver maintains its own integer routine
+for efficiency, and we prove that routine equal to the field defined in~\citeref{hnbm}. The
+\emph{trajectory the solver follows}, however, is not covered. Equations (3) and (6)
+of~\citeref{liwang2022} accumulate their input, $u \leftarrow u + (Wx - \theta)$, and this
+accumulation is not the memoryless single-site update for which the convergence and detailed-balance
+theorems of~\citeref{hnbm} are stated; the two agree only on the first inner iteration, when $u$ is
+still zero. So the objective, the field, and the minimizers are certified, and the path taken
+through the state space is not.
+
+\section{The solver}\label{sec:solver}
+
+The search is Algorithm~2 of Li and Wang~\citeref{liwang2022}, used unchanged. It maintains a
+population of $N$ copies of a neurodynamic model. Each copy is run until it settles; the best state
+found so far, the \emph{incumbent}, is recorded; the population is then re-initialized around the
+incumbent by a particle-swarm rule (eq.~7 there), and a measure of how spread out the population is
+(eq.~8) triggers random bit flips (eq.~9) when the copies have collapsed onto each other. The search
+stops after $M$ consecutive rounds without improving the incumbent. Each copy is either the
+deterministic recurrence of eq.~(3), which we call DHNm, or its stochastic counterpart eq.~(6),
+which we call BMm and which accepts a flip with a probability given by a logistic function of the
+local field divided by a temperature. We implement both.
+
+\medskip\noindent\textbf{Only this stage applies here.} Li and Wang precede the search with an
+Algorithm~1, which is a deterministic simplification step: it is Sudoku constraint propagation, and
+on five of their ten benchmark puzzles it finishes the job by itself, so that the search never runs.
+Our queens pipeline has no such stage; the encoding is built directly from the board and nothing is
+assigned in advance. An analogue exists --- if some row or column has exactly one square not attacked
+by a given, a queen must go there, and one can iterate --- and would shrink the encoding on heavily
+constrained instances. We have not implemented it.
+
+\medskip\noindent\textbf{The constants the source does not give.} Reproducing~\citeref{liwang2022}
+requires values for the initial temperature, the cooling rate, the number of inner iterations, the
+mutation probability, the diversity threshold $\mathcal{T}$, and the three particle-swarm
+coefficients $c_0,c_1,c_2$. None is stated anywhere in that paper, so all had to be recovered
+experimentally. Two of them turned out to matter in a way that goes beyond tuning.
+
+The first is $c_2$, which weights the pull of the incumbent. If $c_2$ is comparable to $c_1$, every
+copy is dragged onto the incumbent; once the incumbent sits on a plateau the population collapses
+and the search stops exploring. Taking $c_2$ well below $c_1$ removes this.
+
+The second is $\mathcal{T}$. Equation~(8) measures diversity as an average of Euclidean distances
+divided by the number of unknowns $n$, and this quantity is at most $1/\sqrt{n}$. A fixed threshold
+therefore means something different on each instance, and on a large instance it can fire on every
+round. We compare $\mathcal{T}$ against the diversity scaled by $\sqrt{n}$, which makes it a number
+in $[0,1]$ with the same meaning everywhere. The value we recovered is model-specific, $0.9$ for
+DHNm against $0.4$ for BMm. It was fitted on Sudoku, and it transfers: on the empty $8 \times 8$
+queens board DHNm fails at BMm's $0.4$ and succeeds on $9$ of $10$ seeds at its own $0.9$. A constant
+recovered on one problem and confirmed on an unrelated one is on much firmer ground than a fitted
+one.
+
+\section{What happens when we run it}\label{sec:meas}
+
+All runs use population and stall limit $20$, at most $60$ rounds, $40$ inner iterations, initial
+temperature $3.0$, cooling factor $0.9$, and a fixed base seed; the generator is a
+\texttt{splitmix64} and nothing reads a clock, so the table can be reproduced exactly. The
+comparison is against a backtracking completion search written separately and sharing nothing with
+the encoding. That baseline is itself certified: we prove that every board it returns satisfies
+\lstinline{isQueens}. We do not prove the converse, that it finds a solution whenever one exists;
+it is exhaustive by construction, but that is an argument about the program rather than a theorem
+about it, which is why the blocked instances of \secref{sec:correct} are refuted separately.
+
+\begin{center}\small
+\begin{tabular}{@{}lrrr rr rrr r r@{}}
+\toprule
+& & & & \multicolumn{2}{c}{backtracking} & \multicolumn{3}{c}{search, with BMm} & DHNm & one BMm\\
+\cmidrule(lr){5-6}\cmidrule(lr){7-9}\cmidrule(lr){10-10}\cmidrule(lr){11-11}
+board & $N$ & givens & unknowns & ok & solutions & found & rounds & $s/k$ & $s/k$ & $s/20$\\
+\midrule
+Q4     & 4  & 0 & 26  & yes & 2   & yes & 1  & 10/10 & 10/10 & 7\\
+Q6     & 6  & 0 & 54  & yes & 4   & yes & 4  & 9/10  & 8/10  & 0\\
+Q8     & 8  & 0 & 90  & yes & 92  & yes & 3  & 10/10 & 9/10  & 0\\
+Q10    & 10 & 0 & 134 & yes & 724 & no  & 31 & 0/5   & 1/5   & 0\\
+Comp6  & 6  & 1 & 54  & yes & 1   & no  & 22 & 6/10  & 7/10  & 0\\
+Comp8  & 8  & 3 & 90  & yes & 1   & yes & 14 & 6/10  & 3/10  & 0\\
+Comp8b & 8  & 5 & 90  & yes & 1   & yes & 4  & 10/10 & 10/10 & 0\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The columns are, in order: the size of the board and of its encoding; whether backtracking found a
+completion and whether the checker accepts the board it returned; the number of completions; whether
+the search found a zero at the base seed and in how many rounds; how many of $k$ seeds succeeded;
+the same for DHNm in place of BMm; and how many of $20$ single annealed runs, with no population at
+all, ended on a completion.
+
+Three things are worth drawing out.
+
+\emph{Backtracking wins, comfortably.} It solves every solvable instance and refutes every
+unsolvable one, in times too small to be worth tabulating. We report this rather than working around
+it. The contribution here is that the answers are proved correct, not that they are obtained
+quickly.
+
+\emph{A single annealed machine is much weaker than the population.} It succeeds on $7$ of $20$
+seeds at $N = 4$ and $5$ of $20$ at $N = 5$, and on nothing at all from $N = 6$ upwards or on any
+instance with givens, whereas the population solves ten of the eleven boards in our corpus. This is
+a larger gap than we see for graph colouring, and it is the clearest evidence we have that the
+collaborative part of the method is doing the work.
+
+\emph{Which of the two models one uses matters here and not elsewhere.} Under the population search
+DHNm keeps pace with BMm on the empty boards but falls behind on the instances with many givens.
+On our graph-colouring corpus the two are indistinguishable: DHNm attains the chromatic number on
+$10$ of $10$ seeds for fourteen of the fifteen graphs and fails on the fifteenth, exactly matching
+BMm. Neither corpus on its own would have shown this.
+
+On the unsolvable instances the search finds no zero on any seed, and the best value it reaches is
+exactly $1$ on every one of them, never a fraction. This is \cref{lem:int} appearing in the output.
+
+The count of solutions is a check on the baseline rather than a result: on empty boards it returns
+$1,1,0,0,2,10,4,40,92,352,724$ for $n = 0,\dots,10$, which is the classical sequence, including the
+$92$ solutions of the ordinary eight-queens problem. It also exercises the counting version of the
+problem, which the decision encoding alone does not reach.
+
+\section{Watching it run}\label{sec:widget}
+
+The development includes widgets that draw a run in the Lean infoview as a chessboard, one frame per
+round of the search, with a queen on each occupied square, given queens drawn in black and placed
+queens in white, and a dashed line joining every attacking pair. The line is drawn exactly when one
+of the three pairwise conditions of \lstinline{isQueens} fails, which is exactly when some column or
+diagonal row of $A$ contains two set unknowns; so what one watches disappearing is the residual of
+\eqref{eq:p} and not an illustration of it.
+
+One widget is interactive rather than a replay: the reader places queens by clicking on squares and
+then runs the solver on the resulting partial board. This is done with Lean's remote-procedure-call
+mechanism for widgets, so the code that runs is the same code the theorems are about. It requires
+the file to be open in the editor and runs in the Lean interpreter, so it is a tool for reading the
+development rather than a web page.
+
+We should record one thing about these animations, since it bears on \secref{sec:meas}. The
+single-machine widgets are pinned to seeds that succeed, and they anneal five times more slowly than
+the default schedule; at the default schedule no seed among the first sixty succeeds on either of the
+two instances with givens. The animations are chosen to end on a solved board. The honest summary of
+what one machine can do is the last column of the table above.
+
+\section{What we do not claim}\label{sec:notclaim}
+
+\begin{itemize}\itemsep2pt
+\item No claim of speed. See \secref{sec:meas}.
+\item No new algorithm, and no improvement on the neural-network literature for this problem.
+The search is~\citeref{liwang2022} unchanged. Mańdziuk~\citeref{mandziuk1995} solved $n$-queens
+thirty years ago with a binary Hopfield-type network --- the same $\{0,1\}$ state space we use ---
+in both synchronous and asynchronous modes, and reports convergence rates up to $100\%$ with
+polynomial average cost. Our solver does considerably worse than that, as \secref{sec:meas} shows.
+The difference is that his network is designed for $n$-queens, whereas ours is a general reduction
+to a network we had already formalized for other reasons, and the reduction is proved correct. What
+is new here is the proof, not the performance.
+\item The search is a heuristic, and we prove nothing about whether it succeeds. We prove that its
+positive answers are correct, and that its objective has a zero precisely when the board has a
+completion.
+\item For the backtracking baseline we prove soundness only, as explained in \secref{sec:meas}.
+\item Nothing about cooling schedules. \secref{sec:net} concerns the equilibrium distribution at a
+fixed temperature, in the limit as that temperature falls. It does not say how slowly a real run
+must be cooled in order to stay near equilibrium. This distinction matters here precisely because
+our single-machine measurements are poor: the theorem says the difficulty lies in the schedule and
+not in the encoding, and it must not be read as a remedy.
+\item Nothing about the accumulating recurrences of eqs.~(3) and (6), as explained in
+\secref{sec:net}.
+\end{itemize}
+
+\section*{Acknowledgements}
+% TODO
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+
+\bibitem{hnbm}
+M.~Cipollina, M.~Karatarakis, and F.~Wiedijk.
+\newblock Formalized Hopfield networks and Boltzmann machines.
+\newblock In \emph{LPAR-26}, EPiC Series in Computing, 2026. To appear.
+
+\bibitem{gent2017}
+I.~P.~Gent, C.~Jefferson, and P.~Nightingale.
+\newblock Complexity of $n$-Queens Completion.
+\newblock \emph{Journal of Artificial Intelligence Research}, 59:815--848, 2017.
+
+\bibitem{lucas2014ising}
+A.~Lucas.
+\newblock Ising formulations of many NP problems.
+\newblock \emph{Frontiers in Physics}, 2:5, 2014.
+
+\bibitem{liwang2022}
+H.~Li and J.~Wang.
+\newblock Collaborative neurodynamic algorithms for solving Sudoku puzzles.
+\newblock In \emph{12th International Conference on Information Science and Technology (ICIST)},
+pages 8--17. IEEE, 2022.
+
+\bibitem{mandziuk1995}
+J.~Mańdziuk.
+\newblock Solving the $N$-Queens problem with a binary Hopfield-type network.
+\newblock \emph{Biological Cybernetics}, 72:439--445, 1995. \newblock DOI 10.1007/BF00201419.
+
+\end{thebibliography}
+
+\end{document}

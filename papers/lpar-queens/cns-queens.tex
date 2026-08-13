@@ -1,0 +1,599 @@
+% A translation of Li & Wang, "Collaborative Neurodynamic Algorithms for Solving Sudoku Puzzles"
+% (ICIST 2022, pp. 8-17) to n-Queens Completion, instantiated to what is actually proved in
+% HopfieldNet/QUBO/Instances/Queens/.
+%
+% The point of this document is fidelity in two directions at once: it follows the structure and
+% register of the Sudoku paper, and it says explicitly wherever the queens case does NOT line up
+% with the Sudoku case.  Section III.C is the table of those differences; nothing elsewhere claims
+% a correspondence that section does not license.
+%
+% NOTE: copy `easychair.cls` and `lstlean.tex` from the main paper's directory next to this file.
+\documentclass{easychair}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{csquotes}
+\usepackage{fontawesome}
+
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{theorem}[thm]{Theorem}
+\newtheorem{lemma}[thm]{Lemma}
+\newtheorem{definition}{Definition}[section]
+
+\definecolor{academicpurple}{rgb}{0.4,0.0,0.35}
+\newcommand{\secref}[1]{\hyperref[#1]{\textcolor{academicpurple}{\S\ref*{#1}}}}
+\newcommand{\citeref}[1]{\textcolor{academicpurple}{\cite{#1}}}
+\newcommand{\thmref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Theorem~\ref*{#1}}}}
+\newcommand{\extlink}{~\ensuremath{{}^\text{\faExternalLink}}}
+% TODO before submission: replace COMMIT with the pushed hash.
+\newcommand{\repo}{https://github.com/mkaratarakis/HNBM/blob/COMMIT}
+\newcommand{\src}[1]{\href{\repo/#1}{\extlink}}
+
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1}
+\definecolor{codebg}{rgb}{0.96,0.96,0.99}
+\definecolor{codeframe}{rgb}{0.75,0.70,0.80}
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean,
+  basicstyle=\fontsize{8.4}{9.8}\selectfont\ttfamily,
+  backgroundcolor=\color{codebg},
+  frame=single, framerule=0.5pt, rulecolor=\color{codeframe},
+  framesep=4pt, xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=4pt, belowskip=4pt}
+
+\title{Certified Collaborative Neurodynamic Algorithms\\ for Solving $n$-Queens Completion}
+
+\titlerunning{Certified Collaborative Neurodynamic Algorithms for $n$-Queens Completion}
+
+\author{
+Matteo Cipollina\inst{1}
+\and
+Michail Karatarakis\inst{2}
+\and
+Freek Wiedijk\inst{2}
+}
+
+\institute{
+  Axiomatic AI, Barcelona, Spain\\
+  \email{matteo.cipollina@yahoo.it}
+\and
+  Radboud University, Nijmegen, The Netherlands\\
+  \email{michail.karatarakis@ru.nl, freek@cs.ru.nl}\\
+}
+
+\authorrunning{Cipollina, Karatarakis and Wiedijk}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+In this article, $n$-Queens Completion is formulated as a quadratic unconstrained binary
+optimization problem, and the formulation is certified in the Lean~4 proof assistant. The objective
+is proved to be the energy of a $\{0,1\}$ Boltzmann machine whose minimizers are exactly the
+completions of the board, and every infeasible state is proved to lie at least $\tfrac12$ above that
+minimum. Soundness and completeness of the formulation are both established, and the Boolean checker
+against which they are stated is in turn proved to decide the chess condition written over the
+integers. Collaborative neurodynamic optimization algorithms based on discrete Hopfield networks or
+Boltzmann machines are then applied unchanged to the formulated problem, a population of such
+networks operating concurrently being employed for scatter search and a particle swarm optimization
+rule being used to re-initialize their states upon local convergence. Experimental results on eleven
+instances are elaborated, together with a certified backtracking baseline, to delimit what the
+formalization does and does not establish. The variable reduction algorithm of the Sudoku formulation
+has no counterpart here, and the differences between the two formulations are tabulated rather than
+elided.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+
+Discrete Hopfield networks~\citeref{hopfield1982} and Boltzmann machines~\citeref{ackley1985} settle
+into states of low energy, and minimizing such an energy is, up to an affine change of variables,
+quadratic unconstrained binary optimization (QUBO)~\citeref{lucas2014ising, glover2019}. Constraint
+satisfaction problems can therefore be attacked by encoding them as an energy and letting the network
+descend it. Collaborative neurodynamic optimization~\citeref{che2019} improves on a single such
+network by running a population of them concurrently and re-initializing their states by a particle
+swarm rule, and this scheme was applied to Sudoku by Li and Wang~\citeref{liwang2022}.
+
+Two things are missing from that line of work. The encodings are not verified: a network is built
+from a problem by hand, and if the construction is wrong then a correct descent returns a wrong
+answer, while a descent that finds nothing establishes nothing at all. And the dynamics themselves
+are described rather than proved; in particular the momentum recurrences are asserted to converge to
+local optima on the strength of simulation.
+
+The first gap is what this article closes, for one problem. In our LPAR-26
+paper~\citeref{hnbm} the two models were formalized in Lean~4 together with their convergence and
+ergodicity. Here $n$-Queens Completion is formulated as a QUBO in that framework, the formulation is
+proved faithful in both directions, and the collaborative neurodynamic algorithms
+of~\citeref{liwang2022} are run on the result without modification.
+
+$n$-Queens Completion is chosen deliberately. Given an $N\times N$ board with some queens already
+placed, it asks whether the placement extends to $N$ mutually non-attacking queens. The problem is
+\textsf{NP}-complete, and counting its solutions is $\#\textsf{P}$-complete~\citeref{gent2017};
+unlike the plain $n$-queens problem, which is solvable for every $N\ge4$ by construction, whether a
+completion exists genuinely depends on the givens. A formulation whose negative answers are theorems
+is therefore worth having.
+
+\medskip\noindent\textbf{Contributions and overview.} \secref{sec:prelim} recalls the neurodynamic
+models and what is proved about them. \secref{sec:form} formulates the problem, and
+\secref{sec:diff} tabulates every point at which this formulation differs from the Sudoku
+formulation of~\citeref{liwang2022}; no correspondence is claimed elsewhere that is not licensed
+there. \secref{sec:cert} certifies the formulation. \secref{sec:cns} describes the algorithms as
+applied, \secref{sec:exp} reports results, and \secref{sec:map} maps every statement to its Lean
+identifier.
+
+\section{Preliminaries}\label{sec:prelim}
+
+\subsection{Neurodynamic optimization}\label{sec:neuro}
+
+\emph{1) Discrete Hopfield network.} A discrete Hopfield network (DHN) operates in discrete time on
+$n$ binary neurons:
+\begin{equation}\label{eq:dhn}
+  u(t) = Wx(t) - \theta, \qquad x(t+1) = \sigma\bigl(u(t)\bigr),
+\end{equation}
+where $u\in\mathbb{R}^n$ is the net-input vector, $x\in\{0,1\}^n$ the state vector,
+$W\in\mathbb{R}^{n\times n}$ the symmetric connection weight matrix with zero diagonal,
+$\theta\in\mathbb{R}^n$ the threshold vector, and $\sigma$ is applied element-wise with
+$\sigma(u_i) = 1$ if $u_i > 0$ and $0$ otherwise. The energy
+\begin{equation}\label{eq:E}
+  E(x) = -\tfrac12\sum_{u\neq v}W_{uv}x_ux_v + \sum_u \theta_u x_u
+\end{equation}
+never increases when a single neuron is updated, so an asynchronous run reaches a state that no
+single update changes.
+
+\emph{2) Momentum variants.} As a variant of the DHN, a DHN with a momentum term (DHNm) is
+\begin{equation}\label{eq:dhnm}
+  u(t+1) = u(t) + Wx(t) - \theta, \qquad x(t) = \sigma\bigl(u(t)\bigr), \qquad u(0) = 0 .
+\end{equation}
+A Boltzmann machine replaces the threshold by a stochastic acceptance, and its momentum variant
+(BMm) is
+\begin{equation}\label{eq:bmm}
+  u(t+1) = u(t) + Wx(t) - \theta, \qquad
+  \Pr\bigl[x_i(t+1) = 1\bigr] = \frac{1}{1 + e^{-u_i(t)/T(t)}},
+\end{equation}
+with a geometric cooling schedule $T(t) = T_0\eta^t$ for $0 < \eta < 1$. Equations~\eqref{eq:dhnm}
+and~\eqref{eq:bmm} are equations (3) and (6) of~\citeref{liwang2022}, and are the recurrences
+actually iterated below.
+
+\emph{3) Collaborative search.} A population of $N$ such networks is run concurrently. The best state
+found is retained as the incumbent $x^{*}$; the initial states are then re-initialized by a particle
+swarm rule, and a diversity measure over the population triggers bit-flip mutation when the
+population collapses onto $x^{*}$. Termination is $M$ consecutive rounds without improvement to
+$x^{*}$.
+
+\subsection{What is proved about these models}\label{sec:hnbm}
+
+Both models of \secref{sec:neuro} are formalized in~\citeref{hnbm} over an abstract network
+structure, and that development is used here unchanged: convergence of the asynchronous
+single-neuron dynamics, and, for the Boltzmann machine at fixed temperature, existence and
+uniqueness of the stationary distribution $\propto e^{-E(x)/T}$, the latter via a formalization of
+the Perron--Frobenius theorem.
+
+It must be said at once that this does \emph{not} cover \eqref{eq:dhnm} or \eqref{eq:bmm}. Those
+recurrences accumulate their net input, and the accumulated $u$ is not the net input of any state of
+the network; the two coincide only at $t = 0$, where $u = 0$. The convergence of DHNm and BMm to
+local optima is asserted in~\citeref{liwang2022} on the strength of simulation, and remains
+unproved here. What is certified below is the \emph{objective} these recurrences descend, not the
+path they take through the state space; \secref{sec:cert} states this boundary precisely.
+
+\section{Problem formulation}\label{sec:form}
+
+\subsection{$n$-Queens Completion}
+
+Let $N$ be the board size and let $G \subseteq \{0,\dots,N-1\}^2$ be the set of \emph{givens},
+squares already carrying a queen. Let $x_{ij} = 1$ mean that a queen stands on the square in row $i$
+and column $j$, and $x_{ij} = 0$ otherwise. A completion is a placement of $N$ queens, no two
+attacking, that includes every given. Writing $d$ for a diagonal and $a$ for an anti-diagonal of
+length at least two, and $s_d, s_a$ for one auxiliary variable per such diagonal, the formulation is
+\begin{subequations}\label{eq:form}
+\begin{align}
+  \textstyle\sum_{j} x_{ij} &= 1, & i &= 0,\dots,N-1, \label{eq:form-row}\\
+  \textstyle\sum_{i} x_{ij} &= 1, & j &= 0,\dots,N-1, \label{eq:form-col}\\
+  \textstyle\sum_{(i,j)\in d} x_{ij} + s_d &= 1, & d &= 0,\dots,2N-4, \label{eq:form-diag}\\
+  \textstyle\sum_{(i,j)\in a} x_{ij} + s_a &= 1, & a &= 0,\dots,2N-4, \label{eq:form-anti}\\
+  x_{ij} &= 1, & (i,j) &\in G, \label{eq:form-giv}\\
+  x_{ij}, s_d, s_a &\in \{0,1\}. & & \label{eq:form-bin}
+\end{align}
+\end{subequations}
+Constraints~\eqref{eq:form-row} and~\eqref{eq:form-col} ensure that every row and every column of a
+completed board carries exactly one queen. Constraints~\eqref{eq:form-diag}
+and~\eqref{eq:form-anti} ensure that no diagonal or anti-diagonal carries two, the auxiliary
+variable absorbing the slack when a diagonal is empty. Constraints~\eqref{eq:form-giv} enforce the
+givens $G$, and~\eqref{eq:form-bin} the binary requirement.
+
+Only diagonals of length at least two are constrained, a single square being unable to carry two
+queens; of the $2N-1$ diagonals in each direction the two extreme ones are single corners, leaving
+$2N-3$ in each direction. The number of variables is therefore
+\begin{equation}\label{eq:sizes}
+  n \;=\; N^2 + 2(2N-3) \;=\; N^2 + 4N - 6 ,
+  \qquad
+  m \;=\; 6N - 6 + |G| ,
+\end{equation}
+where $m$ counts the constraints; for $N = 8$ this is $n = 90$ and $m = 42$ with no givens.
+
+\subsection{Quadratic penalties}
+
+Collecting~\eqref{eq:form-row}--\eqref{eq:form-giv} into a $0/1$ matrix $A \in \{0,1\}^{m\times n}$
+and a right-hand side $b = \mathbf{1}$, the quadratic penalty is
+\begin{equation}\label{eq:p}
+  p(x) \;=\; \lVert Ax - b\rVert_2^2 \;=\; \sum_{r=1}^{m}\Bigl(\textstyle\sum_{u\in r}x_u - b_r\Bigr)^{2},
+\end{equation}
+so that $p(x) \ge 0$ always and $p(x) = 0$ exactly when~\eqref{eq:form} is satisfied. Expanding
+\eqref{eq:p} and using $x_u^2 = x_u$ to fold the diagonal of $A^{\top}\!A$ into the threshold gives
+\begin{equation}\label{eq:WT}
+  W_{uv} = -(A^{\top}\!A)_{uv} \ (u \neq v), \qquad
+  W_{uu} = 0, \qquad
+  \theta_u = \tfrac12\deg(u) - \textstyle\sum_{r \ni u} b_r ,
+\end{equation}
+with $\deg(u)$ the number of constraints containing $u$, and then
+\begin{equation}\label{eq:Ep}
+  E(x) \;=\; \tfrac12\bigl(p(x) - \lVert b\rVert_2^2\bigr) .
+\end{equation}
+Minimizing the energy~\eqref{eq:E} of the network~\eqref{eq:WT} and solving~\eqref{eq:form} are
+therefore the same problem. Since $b \equiv \mathbf{1}$ here, $\theta_u = -\tfrac12\deg(u)$.
+
+\subsection{How this formulation differs from the Sudoku formulation}\label{sec:diff}
+
+The Sudoku formulation of~\citeref{liwang2022} and the formulation above are both quadratic
+unconstrained binary optimizations solved by the same algorithms, but they are not analogous point
+for point, and the differences are recorded here so that nothing later depends on a correspondence
+that does not hold.
+
+\begingroup\small
+\setlength{\tabcolsep}{4pt}
+\begin{center}
+\begin{tabular}{@{}p{0.24\textwidth}p{0.33\textwidth}p{0.35\textwidth}@{}}
+\toprule
+& Sudoku~\citeref{liwang2022} & $n$-Queens Completion (here)\\
+\midrule
+decision variables & $x_{ijk}$, one per cell and digit; $n^3 = 729$ at $n = 9$ &
+  $x_{ij}$, one per square, plus one auxiliary variable per constrained diagonal; $N^2+4N-6$\\
+constraint families & four, all \emph{exactly-one} (10a)--(10d) &
+  two exactly-one, two \emph{at-most-one}\\
+auxiliary variables & none needed &
+  $2(2N-3)$ needed, since at-most-one is not an equality\\
+column degree of $A$ & uniformly $4$ &
+  $4$ at an interior square, $3$ at each of the four corners, $1$ at an auxiliary variable\\
+threshold & $\theta = -2\cdot\mathbf{1}$, uniform &
+  $\theta_u \in \{-2, -\tfrac32, -\tfrac12\}$, non-uniform and half-integral\\
+variable reduction & Algorithm~1; reduces $729$ to between $0$ and $28\%$, and solves five of ten
+  instances outright & \textbf{no counterpart implemented}; see below\\
+givens & enforced by (10e) after reduction &
+  enforced as one-variable constraints, no reduction stage\\
+instances reported & five, of ten, after reduction &
+  eleven completable boards and seven blocked ones\\
+reported statistics & best/worst objective value, mean and standard deviation over runs &
+  success counts over seeds; see \secref{sec:exp} for why\\
+\bottomrule
+\end{tabular}
+\end{center}
+\captionof{table}{Differences between the two formulations.}\label{tab:diff}
+\endgroup
+
+\medskip Three of these deserve comment.
+
+\emph{At-most-one is not exactly-one.} All four Sudoku families are equalities, so~\eqref{eq:p}
+applies directly and no auxiliary variables arise. A diagonal, by contrast, may legitimately be
+empty, so \enquote{at most one queen} is not an equality. One auxiliary variable per diagonal
+converts it into one: if the diagonal is empty the auxiliary variable is set instead, if it carries
+one queen the auxiliary variable is $0$, and if it carries two no value of the auxiliary variable
+satisfies the constraint, so the row contributes at least $1$ to~\eqref{eq:p}. One such variable
+suffices per diagonal, whatever the diagonal's length. This is the only structural addition the
+queens formulation makes to the Sudoku one, and it is what accounts for the $4N-6$ extra variables
+in~\eqref{eq:sizes}.
+
+\emph{The degrees are not uniform.} In the Sudoku formulation every variable occurs in exactly four
+constraints, so $\theta$ is the constant $-2$. Here the degree is $4$, $3$ or $1$, and $\theta_u$ is
+correspondingly $-2$, $-\tfrac32$ or $-\tfrac12$. Half-integral thresholds are harmless
+for~\eqref{eq:E}, whose $\theta$ is real-valued, but $\theta$ is stored in an integer array so that
+the inner loop is exact integer arithmetic; what is stored is therefore $2\theta_u = -\deg(u)$, and
+it is halved once where the real-valued energy is defined.
+
+\emph{There is no variable reduction algorithm.} Algorithm~1 of~\citeref{liwang2022} is Sudoku
+constraint propagation: it fixes the variables of the given cells, eliminates the variables they
+exclude in the same row, column and block, and fixes any cell left with a unique candidate. Its
+effect is large --- five of the ten instances are solved by it alone. Nothing corresponding is
+implemented here, so every result in \secref{sec:exp} is obtained by the collaborative search
+operating on the full $N^2+4N-6$ variables. An analogue exists in principle, since a row or column
+left with a single square unattacked by a given must carry a queen there, and its absence is a
+difference in the pipeline rather than in the formulation. Consequently the queens results are not
+comparable with the Sudoku results of~\citeref{liwang2022} in either direction.
+
+\section{Certification of the formulation}\label{sec:cert}
+
+The formulation~\eqref{eq:form}--\eqref{eq:Ep} is developed in Lean~4 on top of the networks
+of~\citeref{hnbm}, and the following are proved rather than argued. Throughout, a board is an array
+$q$ of $N$ column indices, $q_i$ being the column of the queen in row $i$, so that
+\eqref{eq:form-row} holds by construction.
+
+\begin{thm}[the objective is an energy]\label{thm:net}
+For any well-formed instance of~\eqref{eq:p}, the choice~\eqref{eq:WT} satisfies~\eqref{eq:Ep};
+hence $E$ attains its minimum $-\tfrac12\lVert b\rVert_2^2$ exactly at the points where $p$ vanishes,
+and, $p$ being integer-valued, every other state lies at least $\tfrac12$ above that minimum.
+\end{thm}
+
+\begin{thm}[the formulation is faithful]\label{thm:iff}
+Suppose every given lies on the board. If $p(x) = 0$ then the board decoded from $x$ satisfies the
+checker; if a board satisfies the checker then the point encoded from it has $p = 0$; and therefore
+$p$ has a zero if and only if the instance has a completion.
+\end{thm}
+
+The hypothesis is the only one, and in particular no lower bound on $N$ is assumed: at $N = 0$ there
+are no variables and no constraints, $p$ is an empty sum, and the empty board is vacuously a
+completion. What must be excluded is a given off the board, whose constraint would contain no
+variable and could never be satisfied.
+
+\begin{thm}[the checker is the chess condition]\label{thm:spec}
+The Boolean checker of \thmref{thm:iff} decides the condition stated over the integers: that the
+board has $N$ entries, all on the board, that no two distinct rows $i \neq k$ satisfy
+$q_i = q_k \vee i - q_i = k - q_k \vee i + q_i = k + q_k$, and that every given is present. Hence
+$p$ has a zero if and only if a completion exists in that sense.
+\end{thm}
+
+\thmref{thm:spec} is not redundant. The checker tests the diagonal conditions in the rearranged form
+$i + q_k \neq k + q_i$, because subtraction on the natural numbers is truncated and the literal
+transcription would be wrong; and it reads the board through an array accessor with a default value
+chosen so that a missing entry fails. \thmref{thm:spec} discharges both. As an additional check the
+checker is compared against an independently written implementation over the integers, exhaustively
+on every board of size four and of size five.
+
+\begin{thm}[the minimizers are the completions]\label{thm:min}
+For the queens instance, a state of the network~\eqref{eq:WT} attains minimum energy if and only if
+the board decoded from it is a completion.
+\end{thm}
+
+Combining \thmref{thm:net} with the uniqueness result of \secref{sec:hnbm} gives further that the
+stationary distribution of the Boltzmann machine at temperature $T$ assigns vanishing probability to
+the non-completions as $T \to 0^{+}$. This is a statement about the equilibrium distribution, not
+about any cooling schedule.
+
+\medskip\noindent\emph{Boards with no completion.} Because \thmref{thm:iff} is an equivalence, the
+absence of a zero of $p$ is a statement about the board. Six of the seven blocked instances of
+\secref{sec:exp} are refuted outright, by exhausting the tuples the givens leave open using kernel
+reduction; \lstinline{native_decide} is not used, so no compiler is part of the trusted base. Four of
+the six are shown below; the remaining two are the empty $2\times2$ and $3\times3$ boards, refuted the
+same way. The seventh, an $8\times8$ board with two non-attacking givens, leaves $8^6$ tuples open and
+is reported in \secref{sec:exp} as an observation of the baseline rather than as a theorem.
+
+\begin{center}\small
+\begin{tabular}{@{}lllc@{}}
+\toprule
+instance & board and givens & why blocked & tuples checked\\
+\midrule
+\texttt{attacking} & $8\times8$; $(0,0),(1,1)$ & the givens share a diagonal & none needed\\
+\texttt{blocked4}  & $4\times4$; $(0,0)$ & a corner queen is fatal at $N=4$ & $4^3 = 64$\\
+\texttt{blocked6}  & $6\times6$; $(0,0)$ & and at $N=6$ & $6^5 = 7776$\\
+\texttt{blocked7}  & $7\times7$; $(0,0),(1,6)$ & the givens do \emph{not} attack & $7^5 = 16807$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{blocked7} is the instance worth noting: its two given queens share no row, column or
+diagonal, so the placement is locally unobjectionable, and it admits no completion. By
+\thmref{thm:iff} the refutation extends to every one of the $2^{71}$ binary vectors of that
+instance, from a check over $16807$ tuples. A corner queen, by contrast, is fatal only at $N = 4$ and
+$N = 6$: the completions of $\langle n, \{(0,0)\}\rangle$ for $n = 4,\dots,10$ number
+$0,2,0,4,4,28,64$.
+
+\medskip\noindent\emph{Where the certification stops.} The objective is identified with the energy
+by \thmref{thm:net}; the integer routine computing the net input in the inner loop is proved equal to
+the network's local field; and the minimizers are characterized by \thmref{thm:min}. The
+\emph{trajectory} is not certified, for the reason given in \secref{sec:hnbm}: \eqref{eq:dhnm}
+and~\eqref{eq:bmm} accumulate, and no configuration of the implemented solver is the single-neuron
+dynamics that~\citeref{hnbm} covers.
+
+\section{Collaborative neurodynamic algorithms}\label{sec:cns}
+
+Algorithm~2 of~\citeref{liwang2022} is applied unmodified. A population of $N$ copies of DHNm
+\eqref{eq:dhnm} or BMm \eqref{eq:bmm} is run to equilibrium; the incumbent $x^{*}$ is updated from
+the best state found; the initial states are re-initialized by the particle swarm rule; and bit-flip
+mutation fires when the diversity of the population falls below a threshold $\mathcal{T}$. The only
+problem-specific input is the list of mutually exclusive variable groups used for one-hot
+initialization, which for this formulation is the $N$ squares of each board row. As recorded in
+\secref{sec:diff}, no variable reduction precedes the search.
+
+Reproducing~\citeref{liwang2022} requires numerical values for $T_0$, $\eta$, the inner iteration
+count, the mutation probability $P_m$, the diversity threshold $\mathcal{T}$, and the swarm
+coefficients $c_0, c_1, c_2$. None is stated there, and all were recovered experimentally. Two are
+not merely a matter of tuning.
+
+The coefficient $c_2$ weights the pull of the incumbent. If it is comparable to $c_1$ then every copy
+is drawn onto $x^{*}$, and once $x^{*}$ lies on a plateau the population ceases to explore. Taking
+$c_2$ well below $c_1$ removes this.
+
+The diversity threshold $\mathcal{T}$ must be made scale-free. The diversity measure
+of~\citeref{liwang2022} is an average of Euclidean distances divided by the number of variables, and
+is therefore at most $1/\sqrt{n}$; a fixed threshold consequently means something different on every
+instance, and on a large one fires on every round. The threshold is compared here against the
+diversity scaled by $\sqrt{n}$. The recovered value is model-specific, $0.9$ for DHNm against $0.4$
+for BMm; having been fitted on Sudoku it transfers, in that on the empty $8\times8$ board DHNm fails
+at BMm's $0.4$ and succeeds on nine of ten seeds at $0.9$.
+
+\section{Experimental results}\label{sec:exp}
+
+The hyper-parameters are fixed across instances: population and stall limit $20$, at most $60$
+rounds, $40$ inner iterations, $T_0 = 3.0$, $\eta = 0.9$, one-hot initialization, and a fixed base
+seed. The generator is \texttt{splitmix64} and no clock is read, so the table is reproducible
+exactly. The baseline is a chronological backtracking completion search written independently of the
+formulation; it is itself certified, in that every board it returns is proved to satisfy the checker.
+The converse is not proved, so its failures are reported as observations.
+
+\begin{center}\small
+\begin{tabular}{@{}lrrr rr rrr r r@{}}
+\toprule
+& & & & \multicolumn{2}{c}{backtracking} & \multicolumn{3}{c}{CNS/BMm} & CNS/DHNm & BMm alone\\
+\cmidrule(lr){5-6}\cmidrule(lr){7-9}\cmidrule(lr){10-10}\cmidrule(lr){11-11}
+instance & $N$ & $|G|$ & $n$ & ok & \#compl. & found & rounds & $s/k$ & $s/k$ & $s/20$\\
+\midrule
+Q4     & 4  & 0 & 26  & y & 2   & y & 1  & 10/10 & 10/10 & 7\\
+Q6     & 6  & 0 & 54  & y & 4   & y & 4  & 9/10  & 8/10  & 0\\
+Q8     & 8  & 0 & 90  & y & 92  & y & 3  & 10/10 & 9/10  & 0\\
+Q10    & 10 & 0 & 134 & y & 724 & n & 31 & 0/5   & 1/5   & 0\\
+Comp6  & 6  & 1 & 54  & y & 1   & n & 22 & 6/10  & 7/10  & 0\\
+Comp8  & 8  & 3 & 90  & y & 1   & y & 14 & 6/10  & 3/10  & 0\\
+Comp8b & 8  & 5 & 90  & y & 1   & y & 4  & 10/10 & 10/10 & 0\\
+\bottomrule
+\end{tabular}
+\end{center}
+\captionof{table}{Instance sizes, completion counts, and results of the collaborative algorithms.
+Columns: board size, number of givens, number of variables $n$ from~\eqref{eq:sizes}; whether
+backtracking found a completion and whether the checker accepts the board it returned; the number of
+completions; whether CNS/BMm reached $p = 0$ at the base seed and in how many rounds; successes over
+$k$ seeds for CNS/BMm and for CNS/DHNm; and successes over $20$ seeds for a single BMm run with no
+population.}\label{tab:results}
+
+\medskip\noindent\emph{Why success counts and not means.} \citeref{liwang2022} reports best and worst
+objective values with means and standard deviations. That statistic is uninformative for this
+formulation: by \thmref{thm:net} the objective is integer-valued, so a run ends either at $p = 0$ or
+at $p \ge 1$, and on the blocked instances every failed run ends at exactly $1$. A mean over runs
+therefore reports little beyond the success rate, which is given directly.
+
+\medskip\noindent Three observations. First, backtracking solves every completable instance and
+refutes every blocked one in times not worth tabulating; no speed claim is made for the neurodynamic
+algorithms. Second, a single BMm run without a population succeeds on $7$ of $20$ seeds at $N = 4$
+and $5$ of $20$ at $N = 5$, and on nothing from $N = 6$ upwards or on any instance with givens,
+against ten of eleven instances for the population; the collaborative element is not a refinement
+here but the difference between working and not. Third, the choice between DHNm and BMm matters on
+this problem and not on others: DHNm keeps pace on the empty boards and falls behind as the number of
+givens grows, whereas on a graph-colouring corpus formulated in the same framework the two are
+indistinguishable.
+
+On the blocked instances of \secref{sec:cert} the search reaches no zero on any seed, and its best
+value is exactly $1$ in every case. The completion counts are a check on the baseline, which returns
+$1,1,0,0,2,10,4,40,92,352,724$ for $n = 0,\dots,10$ on the empty boards, the classical sequence.
+
+\medskip\noindent\emph{Visualization.} A run may be watched in the Lean infoview as a chessboard, one
+frame per round, with given queens drawn in black, placed queens in white, and a dashed segment
+joining every attacking pair. A segment appears exactly when one of the pairwise conditions of
+\thmref{thm:spec} fails, which is exactly when a column or diagonal constraint of $A$ carries two
+set variables, so what is watched disappearing is the residual of~\eqref{eq:p}. One widget is
+interactive: queens are placed by clicking and the solver is then run on the resulting instance
+through the proof assistant's remote-procedure-call mechanism, so the code that runs is the code the
+theorems are about.
+
+\section{From the formulation to the development}\label{sec:map}
+
+\begingroup\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{center}
+\begin{tabular}{@{}p{0.40\textwidth}p{0.31\textwidth}l@{}}
+\toprule
+statement & Lean identifier & file\\
+\midrule
+\eqref{eq:p}, the canonical form & \lstinline{Problem} & \texttt{QUBO/Problem.lean}\src{HopfieldNet/QUBO/Problem.lean}\\
+$p$ is integer-valued & \lstinline{one_le_penaltyR_of_ne_zero} & \texttt{QUBO/Minimizers.lean}\src{HopfieldNet/QUBO/Minimizers.lean}\\
+\thmref{thm:net}, \eqref{eq:Ep} & \lstinline{zeroOneHamiltonian_eq} & \texttt{QUBO/Net.lean}\src{HopfieldNet/QUBO/Net.lean}\\
+minimizers are the feasible points & \lstinline{energy_eq_min_iff} & \texttt{QUBO/Minimizers.lean}\\
+the gap of $\tfrac12$ & \lstinline{half_le_energy_sub_min} & \texttt{QUBO/Minimizers.lean}\\
+the inner loop is the local field & \lstinline{netVec_eq_localField} & \texttt{QUBO/Refine.lean}\src{HopfieldNet/QUBO/Refine.lean}\\
+low-temperature concentration & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{QUBO/Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
+\midrule
+\eqref{eq:form} is well formed & \lstinline{problem_wf}, \lstinline{problem_refines} & \texttt{Queens/Basic.lean}\src{HopfieldNet/QUBO/Instances/Queens/Basic.lean}\\
+\thmref{thm:iff}, soundness & \lstinline{decode_isQueens} & \texttt{Queens/Basic.lean}\\
+\thmref{thm:iff}, completeness & \lstinline{encode_penalty_zero} & \texttt{Queens/Basic.lean}\\
+\thmref{thm:iff}, the equivalence & \lstinline{exists_zero_iff_queens} & \texttt{Queens/Basic.lean}\\
+\thmref{thm:spec} & \lstinline{isQueens_iff}, \lstinline{exists_zero_iff_completion} & \texttt{Queens/Spec.lean}\src{HopfieldNet/QUBO/Instances/Queens/Spec.lean}\\
+agreement with an independent checker & \lstinline{isQueens_eq_naive_four/_five} & \texttt{Queens/Spec.lean}\\
+\thmref{thm:min} & \lstinline{exists_minEnergy_iff} & \texttt{Queens/Converge.lean}\src{HopfieldNet/QUBO/Instances/Queens/Converge.lean}\\
+blocked instances & \lstinline{blocked4_no_queens}, \lstinline{blocked6_no_queens} & \texttt{Queens/Examples.lean}\src{HopfieldNet/QUBO/Instances/Queens/Examples.lean}\\
+\dots\ and \texttt{blocked7} & \lstinline{blk7_no_queens} & \texttt{Queens/Bench.lean}\src{HopfieldNet/QUBO/Instances/Queens/Bench.lean}\\
+\midrule
+the baseline returns only completions & \lstinline{solve_isQueens} & \texttt{Queens/Baseline.lean}\src{HopfieldNet/QUBO/Instances/Queens/Baseline.lean}\\
+completion counts & \lstinline{count} & \texttt{Queens/Baseline.lean}\\
+Algorithm~2 & \lstinline{search} & \texttt{QUBO/Search.lean}\src{HopfieldNet/QUBO/Search.lean}\\
+\eqref{eq:dhnm}, \eqref{eq:bmm} & \lstinline{dhnmStep}, \lstinline{bmmStep} & \texttt{QUBO/Dynamics.lean}\src{HopfieldNet/QUBO/Dynamics.lean}\\
+\cref{tab:results} & \lstinline{table} & \texttt{Queens/Bench.lean}\\
+the widgets & \lstinline{animate}, \lstinline{board} & \texttt{Queens/Widget.lean}, \texttt{Interactive.lean}\src{HopfieldNet/QUBO/Instances/Queens/Interactive.lean}\\
+\bottomrule
+\end{tabular}
+\end{center}
+\captionof{table}{Each statement of this article, its Lean identifier, and its file.}\label{tab:map}
+\endgroup
+
+\section{Concluding remarks}\label{sec:concl}
+
+In this article, $n$-Queens Completion is formulated as a quadratic unconstrained binary
+optimization problem, and that formulation is certified in Lean~4: it is proved sound and complete,
+the checker against which those properties are stated is proved to decide the chess condition
+written over the integers, and the objective is proved to be the energy of a $\{0,1\}$ Boltzmann
+machine whose minimizers are exactly the completions. Collaborative neurodynamic optimization
+algorithms based on a population of discrete Hopfield networks or Boltzmann machines are applied to
+the formulated problem without modification, and experimental results on eleven completable and seven
+blocked instances are elaborated, six of the latter refuted by proof. No variable reduction
+algorithm is proposed, and the differences
+between this formulation and the Sudoku formulation of~\citeref{liwang2022} are tabulated in
+\secref{sec:diff} rather than assumed away.
+
+What the certification buys is not speed. A backtracking search outperforms the neurodynamic
+algorithms on every instance, and a purpose-built Hopfield network for $n$-queens~\citeref{mandziuk1995}
+outperforms them at sizes this formulation does not reach. What it buys is that a run which ends
+without a zero has established a property of the chessboard, and that the objective being descended
+is provably the energy of the network said to be descending it.
+
+Two directions remain. The trajectory is not certified: \eqref{eq:dhnm} and~\eqref{eq:bmm}
+accumulate their net input and are not the single-neuron dynamics for which~\citeref{hnbm} proves
+convergence, so a solver restricted to that dynamics would be certified from the board to the last
+update, and none is. And the variable reduction stage absent from \secref{sec:diff} would, if
+implemented and certified, make the comparison with~\citeref{liwang2022} a fair one; at present it
+is not.
+
+\section*{Acknowledgements}
+% TODO
+
+\begin{thebibliography}{99}
+
+\bibitem{hnbm}
+M.~Cipollina, M.~Karatarakis, and F.~Wiedijk.
+\newblock Formalized Hopfield networks and Boltzmann machines.
+\newblock In \emph{LPAR-26}, EPiC Series in Computing, 2026. To appear. arXiv:2512.07766.
+
+\bibitem{liwang2022}
+H.~Li and J.~Wang.
+\newblock Collaborative neurodynamic algorithms for solving Sudoku puzzles.
+\newblock In \emph{12th International Conference on Information Science and Technology (ICIST)},
+pages 8--17. IEEE, 2022.
+
+\bibitem{che2019}
+H.~Che and J.~Wang.
+\newblock A collaborative neurodynamic approach to global and combinatorial optimization.
+\newblock \emph{Neural Networks}, 114:15--27, 2019. DOI 10.1016/j.neunet.2019.02.002.
+
+\bibitem{hopfield1982}
+J.~J.~Hopfield.
+\newblock Neural networks and physical systems with emergent collective computational abilities.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 79(8):2554--2558, 1982.
+
+\bibitem{ackley1985}
+D.~H.~Ackley, G.~E.~Hinton, and T.~J.~Sejnowski.
+\newblock A learning algorithm for Boltzmann machines.
+\newblock \emph{Cognitive Science}, 9(1):147--169, 1985.
+
+\bibitem{gent2017}
+I.~P.~Gent, C.~Jefferson, and P.~Nightingale.
+\newblock Complexity of $n$-Queens Completion.
+\newblock \emph{Journal of Artificial Intelligence Research}, 59:815--848, 2017.
+
+\bibitem{mandziuk1995}
+J.~Ma\'{n}dziuk.
+\newblock Solving the $N$-Queens problem with a binary Hopfield-type network.
+\newblock \emph{Biological Cybernetics}, 72:439--445, 1995. DOI 10.1007/BF00201419.
+
+\bibitem{lucas2014ising}
+A.~Lucas.
+\newblock Ising formulations of many NP problems.
+\newblock \emph{Frontiers in Physics}, 2:5, 2014. arXiv:1302.5843.
+
+\bibitem{glover2019}
+F.~Glover, G.~Kochenberger, and Y.~Du.
+\newblock Quantum bridge analytics I: a tutorial on formulating and using QUBO models.
+\newblock arXiv:1811.11538, 2019.
+
+\end{thebibliography}
+
+\end{document}

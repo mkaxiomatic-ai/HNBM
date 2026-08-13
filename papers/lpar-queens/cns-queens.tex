@@ -4,8 +4,14 @@
 %
 % The point of this document is fidelity in two directions at once: it follows the structure and
 % register of the Sudoku paper, and it says explicitly wherever the queens case does NOT line up
-% with the Sudoku case.  Section III.C is the table of those differences; nothing elsewhere claims
-% a correspondence that section does not license.
+% with the Sudoku case.  Section 3.4 is the table of those differences; nothing elsewhere claims a
+% correspondence that section does not license.
+%
+% Every board drawn below, every count and every table entry is output of the development:
+%   lake build HopfieldNet.QUBO.Instances.Queens.Bench   -- the two tables, ~16 min
+%   HopfieldNet/QUBO/Instances/Queens/Bench.lean:80      -- the corpus
+% The chessboards use the same normalised outline and palette as the interactive widget, so a figure
+% here and a frame in the infoview are the same picture.
 %
 % NOTE: copy `easychair.cls` and `lstlean.tex` from the main paper's directory next to this file.
 \documentclass{easychair}
@@ -18,6 +24,7 @@
 \usepackage{xcolor}
 \usepackage{csquotes}
 \usepackage{fontawesome}
+\usepackage{tikz}
 
 \newtheorem{thm}{Theorem}[section]
 \newtheorem{theorem}[thm]{Theorem}
@@ -28,6 +35,8 @@
 \newcommand{\secref}[1]{\hyperref[#1]{\textcolor{academicpurple}{\S\ref*{#1}}}}
 \newcommand{\citeref}[1]{\textcolor{academicpurple}{\cite{#1}}}
 \newcommand{\thmref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Theorem~\ref*{#1}}}}
+\newcommand{\tabref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Table~\ref*{#1}}}}
+\newcommand{\figref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Figure~\ref*{#1}}}}
 \newcommand{\extlink}{~\ensuremath{{}^\text{\faExternalLink}}}
 % TODO before submission: replace COMMIT with the pushed hash.
 \newcommand{\repo}{https://github.com/mkaratarakis/HNBM/blob/COMMIT}
@@ -48,6 +57,77 @@
   frame=single, framerule=0.5pt, rulecolor=\color{codeframe},
   framesep=4pt, xleftmargin=6pt, xrightmargin=6pt,
   aboveskip=4pt, belowskip=4pt}
+
+%%% ------------------------------------------------------------------- chessboards
+%%% Palette and queen outline taken from queensBoard.js, so that the figures below and the widget of
+%%% Section 6.4 are the same picture.  A square is addressed (column, -row) with row 0 at the top,
+%%% matching the representation used throughout: q_i is the column of the queen in row i.
+\definecolor{sqlight}{HTML}{F0D9B5}
+\definecolor{sqdark}{HTML}{B58863}
+\definecolor{sqedge}{HTML}{8A6242}
+\definecolor{attackc}{HTML}{C0392B}
+\definecolor{qdarkbody}{HTML}{26221E}
+\definecolor{qdarkedge}{HTML}{0D0B0A}
+\definecolor{qlitebody}{HTML}{FBFAF7}
+\definecolor{qliteedge}{HTML}{4A423A}
+\definecolor{cRow}{HTML}{1F5FA8}
+\definecolor{cCol}{HTML}{1E7A48}
+\definecolor{cDiag}{HTML}{B26B00}
+\definecolor{cAnti}{HTML}{6B3FA0}
+
+%%% Every macro below is prefixed `qc' so that nothing here can collide with the document class or
+%%% with a package loaded later.  `qcpic' opens a picture whose baseline is its centre, so boards of
+%%% different sizes line up when set side by side in a tabular.
+\newenvironment{qcpic}[1]
+  {\begin{tikzpicture}[x=#1,y=#1,baseline=(current bounding box.center)]}
+  {\end{tikzpicture}}
+
+% \qcboard{N} -- the squares and the frame of an N x N board.
+\newcommand{\qcboard}[1]{%
+  \pgfmathtruncatemacro{\qcn}{#1-1}%
+  \foreach \qci in {0,...,\qcn}{\foreach \qcj in {0,...,\qcn}{%
+    \pgfmathtruncatemacro{\qcmix}{mod(\qci+\qcj,2)==0 ? 100 : 0}%
+    \fill[sqlight!\qcmix!sqdark] (\qcj,-\qci) rectangle ++(1,-1);}}%
+  \draw[sqedge,line width=0.5pt] (0,0) rectangle (#1,-#1);}
+
+% \qcglyph{col}{row}{body}{edge} -- one queen, from the widget's outline.
+\newcommand{\qcglyph}[4]{%
+  \begin{scope}[shift={(#1,-#2)},line join=round,line width=0.35pt,draw=#4,fill=#3]
+    \filldraw (0.14,-0.255) -- (0.265,-0.45) -- (0.32,-0.185) -- (0.41,-0.45)
+      -- (0.50,-0.155) -- (0.59,-0.45) -- (0.68,-0.185) -- (0.735,-0.45)
+      -- (0.86,-0.255) -- (0.80,-0.555) -- (0.20,-0.555) -- cycle;
+    \filldraw[rounded corners=0.5pt] (0.175,-0.555) rectangle (0.825,-0.640);
+    \filldraw (0.255,-0.64) .. controls (0.255,-0.78) and (0.205,-0.83) .. (0.165,-0.875)
+      -- (0.835,-0.875) .. controls (0.795,-0.83) and (0.745,-0.78) .. (0.745,-0.64) -- cycle;
+    \filldraw[rounded corners=0.5pt] (0.125,-0.875) rectangle (0.875,-0.950);
+    \foreach \qcu/\qcv in {0.14/0.235, 0.32/0.165, 0.50/0.135, 0.68/0.165, 0.86/0.235}
+      \filldraw (\qcu,-\qcv) circle (0.072);
+  \end{scope}}
+% A given queen is dark, a queen the solver placed is light -- the widget's convention.
+\newcommand{\qcdark}[2]{\qcglyph{#2}{#1}{qdarkbody}{qdarkedge}}
+\newcommand{\qclite}[2]{\qcglyph{#2}{#1}{qlitebody}{qliteedge}}
+% \qcgivens{i/j,...} -- reads exactly like the Lean array literal #[(i,j),...].
+\newcommand{\qcgivens}[1]{\foreach \qcgi/\qcgj in {#1}{\qcdark{\qcgi}{\qcgj}}}
+% \qcplace{q_0,...,q_{N-1}} -- reads exactly like the Lean array #[q_0,...,q_{N-1}].
+\newcommand{\qcplace}[1]{%
+  \foreach \qccol [count=\qcrow from 0] in {#1}{\qclite{\qcrow}{\qccol}}}
+% \qcrule{colour}{i}{j}{i'}{j'} -- one row of A-hat, as a capsule through the centres of its squares.
+\newcommand{\qcrule}[5]{%
+  \draw[#1,line cap=round,opacity=0.42,line width=0.30cm]
+    ({#3+0.5},{-#2-0.5}) -- ({#5+0.5},{-#4-0.5});}
+% \qcmark{i}{j} -- outline one square.
+\newcommand{\qcmark}[2]{\draw[black,line width=0.9pt] (#2,-#1) rectangle ++(1,-1);}
+% \qcattack{i}{j}{i'}{j'} -- the widget's attack indicator: tinted squares and a dashed segment.
+\newcommand{\qcattack}[4]{%
+  \fill[attackc,opacity=0.28] (#2,-#1) rectangle ++(1,-1);
+  \fill[attackc,opacity=0.28] (#4,-#3) rectangle ++(1,-1);
+  \draw[attackc,line width=0.8pt,dash pattern=on 2.4pt off 1.4pt]
+    ({#2+0.5},{-#1-0.5}) -- ({#4+0.5},{-#3-0.5});}
+\newcommand{\qclab}[1]{{\footnotesize #1}}
+
+% Loaded last, and only if the class has not already done so: \secref and \src need \hyperref and
+% \href, and an undefined one of those is a hard error rather than a bad box.
+\usepackage{hyperref}
 
 \title{Certified Collaborative Neurodynamic Algorithms\\ for Solving $n$-Queens Completion}
 
@@ -85,10 +165,11 @@ integers. Collaborative neurodynamic optimization algorithms based on discrete H
 Boltzmann machines are then applied unchanged to the formulated problem, a population of such
 networks operating concurrently being employed for scatter search and a particle swarm optimization
 rule being used to re-initialize their states upon local convergence. Experimental results on eleven
-instances are elaborated, together with a certified backtracking baseline, to delimit what the
-formalization does and does not establish. The variable reduction algorithm of the Sudoku formulation
-has no counterpart here, and the differences between the two formulations are tabulated rather than
-elided.
+completable and seven blocked instances are elaborated, together with a certified backtracking
+baseline, to delimit what the formalization does and does not establish; on six of the seven blocked
+instances the absence of a completion is itself a theorem. The variable reduction algorithm of the
+Sudoku formulation has no counterpart here, and the differences between the two formulations are
+tabulated rather than elided.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
@@ -107,11 +188,11 @@ answer, while a descent that finds nothing establishes nothing at all. And the d
 are described rather than proved; in particular the momentum recurrences are asserted to converge to
 local optima on the strength of simulation.
 
-The first gap is what this article closes, for one problem. In our LPAR-26
-paper~\citeref{hnbm} the two models were formalized in Lean~4 together with their convergence and
-ergodicity. Here $n$-Queens Completion is formulated as a QUBO in that framework, the formulation is
-proved faithful in both directions, and the collaborative neurodynamic algorithms
-of~\citeref{liwang2022} are run on the result without modification.
+The first gap is what this article closes, for one problem. In our LPAR-26 paper~\citeref{hnbm} the
+two models were formalized in Lean~4 together with their convergence and ergodicity. Here
+$n$-Queens Completion is formulated as a QUBO in that framework, the formulation is proved faithful
+in both directions, and the collaborative neurodynamic algorithms of~\citeref{liwang2022} are run on
+the result without modification.
 
 $n$-Queens Completion is chosen deliberately. Given an $N\times N$ board with some queens already
 placed, it asks whether the placement extends to $N$ mutually non-attacking queens. The problem is
@@ -121,12 +202,13 @@ completion exists genuinely depends on the givens. A formulation whose negative 
 is therefore worth having.
 
 \medskip\noindent\textbf{Contributions and overview.} \secref{sec:prelim} recalls the neurodynamic
-models and what is proved about them. \secref{sec:form} formulates the problem, and
-\secref{sec:diff} tabulates every point at which this formulation differs from the Sudoku
-formulation of~\citeref{liwang2022}; no correspondence is claimed elsewhere that is not licensed
-there. \secref{sec:cert} certifies the formulation. \secref{sec:cns} describes the algorithms as
-applied, \secref{sec:exp} reports results, and \secref{sec:map} maps every statement to its Lean
-identifier.
+models and states what is proved about them. \secref{sec:form} formulates the problem, exhibits the
+incidence structure of the formulation in \secref{sec:inc}, and tabulates in \secref{sec:diff} every
+point at which it differs from the Sudoku formulation of~\citeref{liwang2022}; no correspondence is
+claimed elsewhere that is not licensed there. \secref{sec:cert} certifies the formulation and
+\secref{sec:stop} marks where the certification stops. \secref{sec:cns} describes the algorithms as
+applied, \secref{sec:exp} reports results on the whole eighteen-instance corpus, and \secref{sec:map}
+maps every statement of this article to its Lean identifier.
 
 \section{Preliminaries}\label{sec:prelim}
 
@@ -159,7 +241,7 @@ A Boltzmann machine replaces the threshold by a stochastic acceptance, and its m
 \end{equation}
 with a geometric cooling schedule $T(t) = T_0\eta^t$ for $0 < \eta < 1$. Equations~\eqref{eq:dhnm}
 and~\eqref{eq:bmm} are equations (3) and (6) of~\citeref{liwang2022}, and are the recurrences
-actually iterated below.
+actually iterated in \secref{sec:exp}.
 
 \emph{3) Collaborative search.} A population of $N$ such networks is run concurrently. The best state
 found is retained as the incumbent $x^{*}$; the initial states are then re-initialized by a particle
@@ -179,12 +261,13 @@ It must be said at once that this does \emph{not} cover \eqref{eq:dhnm} or \eqre
 recurrences accumulate their net input, and the accumulated $u$ is not the net input of any state of
 the network; the two coincide only at $t = 0$, where $u = 0$. The convergence of DHNm and BMm to
 local optima is asserted in~\citeref{liwang2022} on the strength of simulation, and remains
-unproved here. What is certified below is the \emph{objective} these recurrences descend, not the
-path they take through the state space; \secref{sec:cert} states this boundary precisely.
+unproved here. What is certified in \secref{sec:cert} is the \emph{objective} these recurrences
+descend, not the path they take through the state space; \secref{sec:stop} states this boundary
+precisely.
 
 \section{Problem formulation}\label{sec:form}
 
-\subsection{$n$-Queens Completion}
+\subsection{$n$-Queens Completion}\label{sec:qc}
 
 Let $N$ be the board size and let $G \subseteq \{0,\dots,N-1\}^2$ be the set of \emph{givens},
 squares already carrying a queen. Let $x_{ij} = 1$ mean that a queen stands on the square in row $i$
@@ -215,28 +298,95 @@ $2N-3$ in each direction. The number of variables is therefore
   \qquad
   m \;=\; 6N - 6 + |G| ,
 \end{equation}
-where $m$ counts the constraints; for $N = 8$ this is $n = 90$ and $m = 42$ with no givens.
+where $m$ counts the constraints; for $N = 8$ this is $n = 90$ and $m = 42$ with no givens. Both
+formulas are confirmed on every row of \tabref{tab:results} and \tabref{tab:blocked}.
 
-\subsection{Quadratic penalties}
+\subsection{Quadratic penalties}\label{sec:pen}
 
-Collecting~\eqref{eq:form-row}--\eqref{eq:form-giv} into a $0/1$ matrix $A \in \{0,1\}^{m\times n}$
-and a right-hand side $b = \mathbf{1}$, the quadratic penalty is
+Collecting~\eqref{eq:form-row}--\eqref{eq:form-giv} into a $0/1$ matrix
+$\hat A \in \{0,1\}^{m\times n}$ and a right-hand side $\hat b = \mathbf{1}$, the quadratic penalty is
 \begin{equation}\label{eq:p}
-  p(x) \;=\; \lVert Ax - b\rVert_2^2 \;=\; \sum_{r=1}^{m}\Bigl(\textstyle\sum_{u\in r}x_u - b_r\Bigr)^{2},
+  p(x) \;=\; \lVert \hat Ax - \hat b\rVert_2^2
+        \;=\; \sum_{r=1}^{m}\Bigl(\textstyle\sum_{u\in r}x_u - \hat b_r\Bigr)^{2},
 \end{equation}
 so that $p(x) \ge 0$ always and $p(x) = 0$ exactly when~\eqref{eq:form} is satisfied. Expanding
-\eqref{eq:p} and using $x_u^2 = x_u$ to fold the diagonal of $A^{\top}\!A$ into the threshold gives
+\eqref{eq:p} and using $x_u^2 = x_u$ to fold the diagonal of $\hat A^{\top}\!\hat A$ into the
+threshold gives
 \begin{equation}\label{eq:WT}
-  W_{uv} = -(A^{\top}\!A)_{uv} \ (u \neq v), \qquad
+  W_{uv} = -(\hat A^{\top}\!\hat A)_{uv} \ (u \neq v), \qquad
   W_{uu} = 0, \qquad
-  \theta_u = \tfrac12\deg(u) - \textstyle\sum_{r \ni u} b_r ,
+  \theta_u = \tfrac12\deg(u) - \textstyle\sum_{r \ni u} \hat b_r ,
 \end{equation}
 with $\deg(u)$ the number of constraints containing $u$, and then
 \begin{equation}\label{eq:Ep}
-  E(x) \;=\; \tfrac12\bigl(p(x) - \lVert b\rVert_2^2\bigr) .
+  E(x) \;=\; \tfrac12\bigl(p(x) - \lVert \hat b\rVert_2^2\bigr) .
 \end{equation}
 Minimizing the energy~\eqref{eq:E} of the network~\eqref{eq:WT} and solving~\eqref{eq:form} are
-therefore the same problem. Since $b \equiv \mathbf{1}$ here, $\theta_u = -\tfrac12\deg(u)$.
+therefore the same problem. Since $\hat b \equiv \mathbf{1}$ here, $\theta_u = -\tfrac12\deg(u)$, and
+the thresholds are determined by the degrees alone.
+
+\subsection{The incidence structure}\label{sec:inc}
+
+\begin{figure}[t]
+\centering
+\begin{tabular}{@{}c@{\hspace{2.6em}}c@{}}
+\begin{qcpic}{0.62cm}
+  \qcboard{4}
+  \qcrule{cRow}{1}{0}{1}{3}
+  \qcrule{cCol}{0}{2}{3}{2}
+  \qcrule{cDiag}{0}{1}{2}{3}
+  \qcrule{cAnti}{0}{3}{3}{0}
+  \qcmark{1}{2}
+  \node[cRow,  font=\scriptsize] at (-0.45,-1.5) {$r_{1}$};
+  \node[cDiag, font=\scriptsize] at (1.0,0.34)   {$r_{9}$};
+  \node[cCol,  font=\scriptsize] at (2.5,0.34)   {$r_{6}$};
+  \node[cAnti, font=\scriptsize] at (3.85,0.34)  {$r_{15}$};
+\end{qcpic}
+&
+\begin{qcpic}{0.62cm}
+  \qcboard{4}
+  \qcrule{cRow}{0}{0}{0}{3}
+  \qcrule{cCol}{0}{0}{3}{0}
+  \qcrule{cDiag}{0}{0}{3}{3}
+  \qcmark{0}{0}
+  \draw[cAnti,densely dotted,line width=0.9pt] (0.5,-0.5) circle (0.36);
+  \node[cRow,  font=\scriptsize] at (-0.45,-0.5) {$r_{0}$};
+  \node[cCol,  font=\scriptsize] at (0.5,0.34)   {$r_{4}$};
+  \node[cDiag, font=\scriptsize] at (3.55,-3.86) {$r_{10}$};
+  \node[cAnti, font=\scriptsize] at (1.35,-4.42) {no row};
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) an interior square: $\deg = 4$} & \qclab{(b) a corner: $\deg = 3$}
+\end{tabular}
+\caption{The rows of $\hat A$ through one square of the $4\times4$ board, on which $n = 26$ and
+$m = 18$. Each capsule is one constraint of~\eqref{eq:form}, drawn through the squares whose
+variables it contains: \textcolor{cRow}{board row}, \textcolor{cCol}{column},
+\textcolor{cDiag}{diagonal}, \textcolor{cAnti}{anti-diagonal}. (a) The square $(1,2)$ lies in
+$r_1, r_6, r_9$ and $r_{15}$. (b) The anti-diagonal through the corner $(0,0)$ is the single square
+$\{(0,0)\}$, drawn dotted, which generates no constraint, so the corner lies in three rows only. The
+indices are those the development assigns.}\label{fig:inc}
+\end{figure}
+
+The matrix $\hat A$ of~\eqref{eq:p} is the incidence matrix of a hypergraph on the variables: one row
+per constraint, one column per variable, and $\hat A_{ru} = 1$ when variable $u$ occurs in constraint
+$r$. Rows are laid out by family --- $N$ board rows, then $N$ columns, then $2N-3$ diagonals, then
+$2N-3$ anti-diagonals, then one row per given --- so that board row $i$ is $r_i$ and column $j$ is
+$r_{N+j}$. \figref{fig:inc} draws every row through one square at $N = 4$.
+
+The figure also shows why the degrees are not uniform, which is what makes $\theta$ half-integral. An
+interior square lies in four rows. A corner lies in three: one of its two diagonals is the corner
+itself, and a single square cannot carry two queens, so no constraint is generated for it. An
+auxiliary variable lies in exactly one row. Hence $\deg(u) \in \{4,3,1\}$ and, by~\eqref{eq:WT},
+$\theta_u \in \{-2,-\tfrac32,-\tfrac12\}$.
+
+One detail of the layout is worth recording, because it is where a transcription error would go
+unnoticed. A diagonal is a set of squares on which $i - j$ is constant and an anti-diagonal one on
+which $i + j$ is constant; but the development indexes squares by natural numbers, on which
+subtraction is truncated, $2 - 5$ being $0$ rather than $-3$. Membership is therefore tested
+additively, the square $(i,j)$ lying on the $e$-th row of the diagonal block when $i + N = e + 2 + j$
+and on the $e$-th of the anti-diagonal block when $i + j + (2N-3) = e + 1$. Both are equivalent to the
+intended condition over $\mathbb{Z}$, and neither ever subtracts. The same hazard appears in the
+checker, where it is discharged by \thmref{thm:spec}.
 
 \subsection{How this formulation differs from the Sudoku formulation}\label{sec:diff}
 
@@ -245,57 +395,58 @@ unconstrained binary optimizations solved by the same algorithms, but they are n
 for point, and the differences are recorded here so that nothing later depends on a correspondence
 that does not hold.
 
-\begingroup\small
+\begin{table}[t]
+\centering\small
 \setlength{\tabcolsep}{4pt}
-\begin{center}
-\begin{tabular}{@{}p{0.24\textwidth}p{0.33\textwidth}p{0.35\textwidth}@{}}
+\begin{tabular}{@{}p{0.21\textwidth}p{0.34\textwidth}p{0.36\textwidth}@{}}
 \toprule
 & Sudoku~\citeref{liwang2022} & $n$-Queens Completion (here)\\
 \midrule
 decision variables & $x_{ijk}$, one per cell and digit; $n^3 = 729$ at $n = 9$ &
   $x_{ij}$, one per square, plus one auxiliary variable per constrained diagonal; $N^2+4N-6$\\
-constraint families & four, all \emph{exactly-one} (10a)--(10d) &
+constraint families & four, all \emph{exactly-one}, (10a)--(10d) &
   two exactly-one, two \emph{at-most-one}\\
 auxiliary variables & none needed &
-  $2(2N-3)$ needed, since at-most-one is not an equality\\
-column degree of $A$ & uniformly $4$ &
+  $2(2N-3)$ needed, at-most-one not being an equality\\
+column degree of $\hat A$ & uniformly $4$ &
   $4$ at an interior square, $3$ at each of the four corners, $1$ at an auxiliary variable\\
 threshold & $\theta = -2\cdot\mathbf{1}$, uniform &
   $\theta_u \in \{-2, -\tfrac32, -\tfrac12\}$, non-uniform and half-integral\\
-variable reduction & Algorithm~1; reduces $729$ to between $0$ and $28\%$, and solves five of ten
-  instances outright & \textbf{no counterpart implemented}; see below\\
-givens & enforced by (10e) after reduction &
-  enforced as one-variable constraints, no reduction stage\\
+variable reduction & Algorithm~1; reduces $729$ variables to between $0$ and $28\%$, and solves five
+  of ten instances outright & \textbf{no counterpart implemented}; see below\\
+givens & enforced by (10e), after reduction &
+  enforced as one-variable constraints, with no reduction stage\\
 instances reported & five, of ten, after reduction &
-  eleven completable boards and seven blocked ones\\
-reported statistics & best/worst objective value, mean and standard deviation over runs &
-  success counts over seeds; see \secref{sec:exp} for why\\
+  eleven completable boards and seven blocked ones, none reduced\\
+negative instances & none; every puzzle posed has a solution &
+  seven, on six of which the absence of a solution is a theorem\\
+reported statistics & best and worst objective value, mean and standard deviation over runs &
+  success counts over seeds; see \secref{sec:stats} for why\\
 \bottomrule
 \end{tabular}
-\end{center}
-\captionof{table}{Differences between the two formulations.}\label{tab:diff}
-\endgroup
+\caption{Differences between the two formulations.}\label{tab:diff}
+\end{table}
 
-\medskip Three of these deserve comment.
+\tabref{tab:diff} lists them. Three deserve comment.
 
-\emph{At-most-one is not exactly-one.} All four Sudoku families are equalities, so~\eqref{eq:p}
+\emph{1) At-most-one is not exactly-one.} All four Sudoku families are equalities, so~\eqref{eq:p}
 applies directly and no auxiliary variables arise. A diagonal, by contrast, may legitimately be
 empty, so \enquote{at most one queen} is not an equality. One auxiliary variable per diagonal
 converts it into one: if the diagonal is empty the auxiliary variable is set instead, if it carries
-one queen the auxiliary variable is $0$, and if it carries two no value of the auxiliary variable
-satisfies the constraint, so the row contributes at least $1$ to~\eqref{eq:p}. One such variable
-suffices per diagonal, whatever the diagonal's length. This is the only structural addition the
-queens formulation makes to the Sudoku one, and it is what accounts for the $4N-6$ extra variables
-in~\eqref{eq:sizes}.
+one queen the auxiliary variable is $0$, and if it carries two then no value of the auxiliary
+variable satisfies the constraint, so the row contributes at least $1$ to~\eqref{eq:p}. One such
+variable suffices per diagonal, whatever the diagonal's length. This is the only structural addition
+the queens formulation makes to the Sudoku one, and it is what accounts for the $4N-6$ extra
+variables in~\eqref{eq:sizes}.
 
-\emph{The degrees are not uniform.} In the Sudoku formulation every variable occurs in exactly four
-constraints, so $\theta$ is the constant $-2$. Here the degree is $4$, $3$ or $1$, and $\theta_u$ is
-correspondingly $-2$, $-\tfrac32$ or $-\tfrac12$. Half-integral thresholds are harmless
-for~\eqref{eq:E}, whose $\theta$ is real-valued, but $\theta$ is stored in an integer array so that
-the inner loop is exact integer arithmetic; what is stored is therefore $2\theta_u = -\deg(u)$, and
-it is halved once where the real-valued energy is defined.
+\emph{2) The degrees are not uniform.} In the Sudoku formulation every variable occurs in exactly
+four constraints, so $\theta$ is the constant $-2$. Here the degree is $4$, $3$ or $1$, as
+\figref{fig:inc} shows, and $\theta_u$ is correspondingly $-2$, $-\tfrac32$ or $-\tfrac12$.
+Half-integral thresholds are harmless for~\eqref{eq:E}, whose $\theta$ is real-valued, but $\theta$
+is stored in an integer array so that the inner loop is exact integer arithmetic; what is stored is
+therefore $2\theta_u = -\deg(u)$, and it is halved once, where the real-valued energy is defined.
 
-\emph{There is no variable reduction algorithm.} Algorithm~1 of~\citeref{liwang2022} is Sudoku
+\emph{3) There is no variable reduction algorithm.} Algorithm~1 of~\citeref{liwang2022} is Sudoku
 constraint propagation: it fixes the variables of the given cells, eliminates the variables they
 exclude in the same row, column and block, and fixes any cell left with a unique candidate. Its
 effect is large --- five of the ten instances are solved by it alone. Nothing corresponding is
@@ -310,13 +461,22 @@ comparable with the Sudoku results of~\citeref{liwang2022} in either direction.
 The formulation~\eqref{eq:form}--\eqref{eq:Ep} is developed in Lean~4 on top of the networks
 of~\citeref{hnbm}, and the following are proved rather than argued. Throughout, a board is an array
 $q$ of $N$ column indices, $q_i$ being the column of the queen in row $i$, so that
-\eqref{eq:form-row} holds by construction.
+\eqref{eq:form-row} holds by construction; this is the representation the figures use.
+
+\subsection{The objective is an energy}\label{sec:energy}
 
 \begin{thm}[the objective is an energy]\label{thm:net}
 For any well-formed instance of~\eqref{eq:p}, the choice~\eqref{eq:WT} satisfies~\eqref{eq:Ep};
-hence $E$ attains its minimum $-\tfrac12\lVert b\rVert_2^2$ exactly at the points where $p$ vanishes,
-and, $p$ being integer-valued, every other state lies at least $\tfrac12$ above that minimum.
+hence $E$ attains its minimum $-\tfrac12\lVert \hat b\rVert_2^2$ exactly at the points where $p$
+vanishes, and, $p$ being integer-valued, every other state lies at least $\tfrac12$ above that
+minimum.
 \end{thm}
+
+The gap of $\tfrac12$ is what makes the objective a decision procedure rather than an approximation:
+no state has energy merely close to the minimum, so a run that ends above the minimum ends at least
+$\tfrac12$ above it. It also fixes the reporting convention of \secref{sec:stats}.
+
+\subsection{Soundness and completeness}\label{sec:iff}
 
 \begin{thm}[the formulation is faithful]\label{thm:iff}
 Suppose every given lies on the board. If $p(x) = 0$ then the board decoded from $x$ satisfies the
@@ -329,6 +489,8 @@ are no variables and no constraints, $p$ is an empty sum, and the empty board is
 completion. What must be excluded is a given off the board, whose constraint would contain no
 variable and could never be satisfied.
 
+\subsection{The checker is the chess condition}\label{sec:spec}
+
 \begin{thm}[the checker is the chess condition]\label{thm:spec}
 The Boolean checker of \thmref{thm:iff} decides the condition stated over the integers: that the
 board has $N$ entries, all on the board, that no two distinct rows $i \neq k$ satisfy
@@ -336,12 +498,15 @@ $q_i = q_k \vee i - q_i = k - q_k \vee i + q_i = k + q_k$, and that every given 
 $p$ has a zero if and only if a completion exists in that sense.
 \end{thm}
 
-\thmref{thm:spec} is not redundant. The checker tests the diagonal conditions in the rearranged form
-$i + q_k \neq k + q_i$, because subtraction on the natural numbers is truncated and the literal
-transcription would be wrong; and it reads the board through an array accessor with a default value
-chosen so that a missing entry fails. \thmref{thm:spec} discharges both. As an additional check the
-checker is compared against an independently written implementation over the integers, exhaustively
-on every board of size four and of size five.
+\thmref{thm:spec} is not redundant. For the reason given in \secref{sec:inc}, the checker tests the
+diagonal conditions in the rearranged form $i + q_k \neq k + q_i$, and it reads the board through an
+array accessor with a default value chosen so that a missing entry fails. Neither is a statement
+about chess. \thmref{thm:spec} discharges both, and after it the specification a reader has to trust
+mentions no arrays, no defaults and no truncated arithmetic. As an additional check the checker is
+compared against an independently written implementation over the integers, exhaustively on every
+board of size four and of size five.
+
+\subsection{The minimizers are the completions}\label{sec:min}
 
 \begin{thm}[the minimizers are the completions]\label{thm:min}
 For the queens instance, a state of the network~\eqref{eq:WT} attains minimum energy if and only if
@@ -353,136 +518,327 @@ stationary distribution of the Boltzmann machine at temperature $T$ assigns vani
 the non-completions as $T \to 0^{+}$. This is a statement about the equilibrium distribution, not
 about any cooling schedule.
 
-\medskip\noindent\emph{Boards with no completion.} Because \thmref{thm:iff} is an equivalence, the
-absence of a zero of $p$ is a statement about the board. Six of the seven blocked instances of
-\secref{sec:exp} are refuted outright, by exhausting the tuples the givens leave open using kernel
-reduction; \lstinline{native_decide} is not used, so no compiler is part of the trusted base. Four of
-the six are shown below; the remaining two are the empty $2\times2$ and $3\times3$ boards, refuted the
-same way. The seventh, an $8\times8$ board with two non-attacking givens, leaves $8^6$ tuples open and
-is reported in \secref{sec:exp} as an observation of the baseline rather than as a theorem.
+\subsection{Boards with no completion}\label{sec:blocked}
 
-\begin{center}\small
-\begin{tabular}{@{}lllc@{}}
-\toprule
-instance & board and givens & why blocked & tuples checked\\
-\midrule
-\texttt{attacking} & $8\times8$; $(0,0),(1,1)$ & the givens share a diagonal & none needed\\
-\texttt{blocked4}  & $4\times4$; $(0,0)$ & a corner queen is fatal at $N=4$ & $4^3 = 64$\\
-\texttt{blocked6}  & $6\times6$; $(0,0)$ & and at $N=6$ & $6^5 = 7776$\\
-\texttt{blocked7}  & $7\times7$; $(0,0),(1,6)$ & the givens do \emph{not} attack & $7^5 = 16807$\\
-\bottomrule
+\begin{figure}[t]
+\centering
+\begin{tabular}{@{}c@{\hspace{1.7em}}c@{\hspace{1.7em}}c@{\hspace{1.0em}}c@{\hspace{1.0em}}c@{}}
+\begin{qcpic}{0.40cm}
+  \qcboard{8}\qcattack{0}{0}{1}{1}\qcgivens{0/0,1/1}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{7}\qcgivens{0/0,1/6}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{4}\qcgivens{0/0}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{4}\qcplace{2,0,3,1}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{4}\qcplace{1,3,0,2}
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) \texttt{Attack}} & \qclab{(b) \texttt{Blk7}} & \qclab{(c) \texttt{Blk4}}
+& \qclab{(d)} & \qclab{(e)}
 \end{tabular}
-\end{center}
+\caption{Three blocked instances, and why. Given queens are dark, as in the widget. (a) The two
+givens share a diagonal, shown the way the widget shows it, and no enumeration is needed. (b) The
+givens of \texttt{Blk7} share no row, no column and no diagonal, and the board admits no completion
+regardless; this is the phenomenon that makes Completion hard. (c) A single corner queen at $N = 4$,
+refuted by (d) and (e), which are the only two completions of the empty $4\times4$ board: neither
+places a queen at $(0,0)$. A corner queen is fatal at $N = 4$ and $N = 6$ and harmless
+thereafter.}\label{fig:blocked}
+\end{figure}
 
-\texttt{blocked7} is the instance worth noting: its two given queens share no row, column or
-diagonal, so the placement is locally unobjectionable, and it admits no completion. By
-\thmref{thm:iff} the refutation extends to every one of the $2^{71}$ binary vectors of that
-instance, from a check over $16807$ tuples. A corner queen, by contrast, is fatal only at $N = 4$ and
-$N = 6$: the completions of $\langle n, \{(0,0)\}\rangle$ for $n = 4,\dots,10$ number
-$0,2,0,4,4,28,64$.
+Because \thmref{thm:iff} is an equivalence, the absence of a zero of $p$ is a statement about the
+board. On six of the seven blocked instances of \tabref{tab:blocked} that statement is proved, by
+exhausting the tuples the givens leave open using kernel reduction; \lstinline{native_decide} is not
+used, so no compiler is part of the trusted base. \figref{fig:blocked} shows three of the six.
 
-\medskip\noindent\emph{Where the certification stops.} The objective is identified with the energy
-by \thmref{thm:net}; the integer routine computing the net input in the inner loop is proved equal to
-the network's local field; and the minimizers are characterized by \thmref{thm:min}. The
-\emph{trajectory} is not certified, for the reason given in \secref{sec:hnbm}: \eqref{eq:dhnm}
-and~\eqref{eq:bmm} accumulate, and no configuration of the implemented solver is the single-neuron
-dynamics that~\citeref{hnbm} covers.
+\texttt{Blk7} is the instance worth noting. Its two given queens share no row, no column and no
+diagonal, so the placement is locally unobjectionable and no attack is displayed, and it admits no
+completion. By \thmref{thm:iff} the refutation extends to every one of the $2^{71}$ binary vectors of
+that instance, from a check over $7^5 = 16807$ tuples. \texttt{Blk4} illustrates the other way an
+instance dies: the empty $4\times4$ board has exactly two completions, drawn as (d) and (e), and
+neither uses the corner, so pinning a queen there is fatal. That a corner queen is nonetheless
+harmless from $N = 7$ on is visible in \tabref{tab:results}, where \texttt{Comp7} is the same
+instance at $N = 7$ and has four completions; the counts for $\langle n, \{(0,0)\}\rangle$ at
+$n = 4,\dots,10$ are $0,2,0,4,4,28,64$.
+
+The seventh instance, \texttt{Blk8}, is an $8\times8$ board with two non-attacking givens. It leaves
+$8^6 = 262144$ tuples open, beyond what kernel reduction will do here, and it is reported as an
+observation of the baseline rather than as a theorem. \tabref{tab:blocked} marks it as such, rather
+than presenting it as carrying the same weight as the other six.
+
+\subsection{Where the certification stops}\label{sec:stop}
+
+The objective is identified with the energy by \thmref{thm:net}; the integer routine computing the
+net input in the inner loop is proved equal to the network's local field; and the minimizers are
+characterized by \thmref{thm:min}. The \emph{trajectory} is not certified, for the reason given in
+\secref{sec:hnbm}: \eqref{eq:dhnm} and~\eqref{eq:bmm} accumulate, and no configuration of the
+implemented solver is the single-neuron dynamics that~\citeref{hnbm} covers. What a run of
+\secref{sec:exp} establishes when it succeeds is therefore a theorem about the board; what it
+establishes when it fails is nothing, and the negative results of \secref{sec:blocked} come from
+enumeration instead.
 
 \section{Collaborative neurodynamic algorithms}\label{sec:cns}
 
-Algorithm~2 of~\citeref{liwang2022} is applied unmodified. A population of $N$ copies of DHNm
-\eqref{eq:dhnm} or BMm \eqref{eq:bmm} is run to equilibrium; the incumbent $x^{*}$ is updated from
-the best state found; the initial states are re-initialized by the particle swarm rule; and bit-flip
-mutation fires when the diversity of the population falls below a threshold $\mathcal{T}$. The only
-problem-specific input is the list of mutually exclusive variable groups used for one-hot
-initialization, which for this formulation is the $N$ squares of each board row. As recorded in
+\subsection{Algorithm 2 as applied}\label{sec:alg}
+
+\begin{figure}[t]
+\centering\small
+\setlength{\tabcolsep}{0pt}
+\begin{tabular}{@{}p{0.965\textwidth}@{}}
+\toprule
+\textbf{Algorithm 2} (of~\citeref{liwang2022}), as applied to~\eqref{eq:form}.\\
+\midrule
+\textbf{Input:} the network $(W,\theta)$ of~\eqref{eq:WT}; a model $\mathcal{M} \in
+\{\text{DHNm}~\eqref{eq:dhnm},\ \text{BMm}~\eqref{eq:bmm}\}$; and $N$, $M$, $c_0$, $c_1$, $c_2$,
+$P_m$, $\mathcal{T}$, $T_0$, $\eta$.\\
+\textbf{Output:} the incumbent $x^{*}$ and its objective value $p(x^{*})$.\\
+\midrule
+\emph{1} \quad draw $x^{(i)}(0)$ with one variable set in each board row, $v^{(i)} \sim
+U[-1,1]^{n}$; set $\hat x^{(i)} \leftarrow x^{(i)}(0)$ and $x^{*} \leftarrow \arg\min_i
+p(\hat x^{(i)})$\\
+\emph{2--7} \quad\, \textbf{repeat:} run each of the $N$ copies of $\mathcal{M}$ from $x^{(i)}(0)$ to
+equilibrium, giving $x^{(i)}$; set $\hat x^{(i)} \leftarrow x^{(i)}$ whenever
+$p(x^{(i)}) < p(\hat x^{(i)})$\\
+\emph{8--14} \quad $x^{*} \leftarrow \arg\min_i p(\hat x^{(i)})$ if that improves on $x^{*}$, and
+reset the stall counter; otherwise increment it. Exit if $p(x^{*}) = 0$\\
+\emph{15--20} \, $v^{(i)} \leftarrow c_0 v^{(i)} + c_1 r_1 (\hat x^{(i)} - x^{(i)})
++ c_2 r_2 (x^{*} - x^{(i)})$ with $r_1, r_2 \sim U[0,1]$, then
+$x^{(i)}(0) \leftarrow \mathrm{round}\bigl(x^{(i)}(0) + v^{(i)}\bigr)$\\
+\emph{21--24} \, $\delta \leftarrow \frac{1}{Nn}\sum_i \lVert \hat x^{(i)} - x^{*}\rVert_2$;
+\ \textbf{if} $\delta\sqrt{n} < \mathcal{T}$ \textbf{then} flip each bit of every $x^{(i)}(0)$ with
+probability $P_m$\\
+\quad\ \ \ \ \ \ \ \, \textbf{until} $p(x^{*}) = 0$, or $M$ consecutive rounds pass without
+improvement, or the round cap is reached\\
+\bottomrule
+\end{tabular}
+\caption{The collaborative search, with the step numbers of~\citeref{liwang2022}. The population is
+re-initialized from the \emph{equilibrium} states $x^{(i)}$ at steps 15--20 while the personal bests
+$\hat x^{(i)}$ supply the cognitive term, and the diversity $\delta$ of step 21 is measured over the
+personal bests. The one-hot draw at step 1, the $\sqrt{n}$ at step 22 and the target of the mutation at
+step 23 are the three points a literal reading of~\citeref{liwang2022} does not settle; all three are
+discussed in \secref{sec:params}.}\label{fig:alg}
+\end{figure}
+
+Algorithm~2 of~\citeref{liwang2022}, reproduced as \figref{fig:alg}, is applied without modification
+to its structure. A population of $N$ copies of DHNm \eqref{eq:dhnm} or BMm \eqref{eq:bmm} is run to
+equilibrium; the incumbent $x^{*}$ is updated from the best state found; the initial states are
+re-initialized by the particle swarm rule; and bit-flip mutation fires when the diversity of the
+population falls below a threshold $\mathcal{T}$. The only problem-specific input is the list of
+mutually exclusive variable groups used at step 1, which for this formulation is the $N$ squares of
+each board row, that is to say the rows $r_0,\dots,r_{N-1}$ of \figref{fig:inc}. As recorded in
 \secref{sec:diff}, no variable reduction precedes the search.
 
-Reproducing~\citeref{liwang2022} requires numerical values for $T_0$, $\eta$, the inner iteration
-count, the mutation probability $P_m$, the diversity threshold $\mathcal{T}$, and the swarm
-coefficients $c_0, c_1, c_2$. None is stated there, and all were recovered experimentally. Two are
-not merely a matter of tuning.
+\subsection{Parameters recovered}\label{sec:params}
 
-The coefficient $c_2$ weights the pull of the incumbent. If it is comparable to $c_1$ then every copy
-is drawn onto $x^{*}$, and once $x^{*}$ lies on a plateau the population ceases to explore. Taking
-$c_2$ well below $c_1$ removes this.
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}llll@{}}
+\toprule
+& meaning & value & \\
+\midrule
+$N$            & population size                            & $20$ & \\
+$M$            & stall limit, in rounds                     & $20$ & \\
+               & round cap                                  & $60$ & \\
+               & inner iterations per equilibration         & $40$ & \\
+$T_0$          & initial temperature                        & $3.0$ & \\
+$\eta$         & cooling rate                               & $0.9$ & \\
+$c_0$          & inertia weight                             & $0.5$ & \\
+$c_1$          & cognitive coefficient                      & $2.0$ & \\
+$c_2$          & social coefficient                         & $0.25$ & decisive; see below\\
+$P_m$          & bit-flip mutation probability              & $0.05$ & \\
+$\mathcal{T}$  & diversity threshold, as a fraction of $\delta_{\max} = 1/\sqrt{n}$
+               & $0.4$ (BMm), $0.9$ (DHNm) & scale-free; see below\\
+\bottomrule
+\end{tabular}
+\caption{The parameters of \figref{fig:alg}, as used for every row of \tabref{tab:results} and
+\tabref{tab:blocked}. \emph{Not one of these values is stated in~\citeref{liwang2022}}; all were
+recovered experimentally, and the two annotated ones are not merely a matter of
+tuning.}\label{tab:params}
+\end{table}
 
-The diversity threshold $\mathcal{T}$ must be made scale-free. The diversity measure
+Reproducing~\citeref{liwang2022} requires numerical values for every parameter in
+\tabref{tab:params}. None is stated there. Two of them are not merely a matter of tuning.
+
+\emph{1) The social coefficient.} The coefficient $c_2$ weights the pull of the incumbent. If it is
+comparable to $c_1$ then every copy is drawn onto $x^{*}$, and once $x^{*}$ lies on a plateau --- which
+on these instances happens almost at once --- the population ceases to explore, and further copies are
+further copies of the same stuck point. Taking $c_2$ well below $c_1$ removes this.
+
+\emph{2) The diversity threshold.} $\mathcal{T}$ must be made scale-free. The diversity measure
 of~\citeref{liwang2022} is an average of Euclidean distances divided by the number of variables, and
 is therefore at most $1/\sqrt{n}$; a fixed threshold consequently means something different on every
 instance, and on a large one fires on every round. The threshold is compared here against the
-diversity scaled by $\sqrt{n}$. The recovered value is model-specific, $0.9$ for DHNm against $0.4$
-for BMm; having been fitted on Sudoku it transfers, in that on the empty $8\times8$ board DHNm fails
-at BMm's $0.4$ and succeeds on nine of ten seeds at $0.9$.
+diversity scaled by $\sqrt{n}$, as step 22 of \figref{fig:alg} records. The recovered value is
+model-specific, $0.9$ for DHNm against $0.4$ for BMm; having been fitted on Sudoku it transfers, in
+that on the empty $8\times8$ board DHNm fails at BMm's $0.4$ and succeeds on nine of ten seeds at
+$0.9$.
+
+Two further choices are interpretations rather than numbers, and are recorded because
+\citeref{liwang2022} does not settle them. Step 1 there says only that
+$x^{(i)}(0) \in \{0,1\}^{n^2}$; uniform bits set about half the variables, whereas a feasible point
+sets exactly one per board row, so a uniformly seeded run spends its whole equilibration merely
+reaching one queen per row. Seeding one-hot starts every copy on the feasible set
+of~\eqref{eq:form-row}, leaving the dynamics the columns and the diagonals. And step 23 says only to
+mutate \enquote{according to Eq. (9)} without naming the target; the mutation is applied here to the
+seeds $x^{(i)}(0)$, and never to $x^{*}$.
 
 \section{Experimental results}\label{sec:exp}
 
-The hyper-parameters are fixed across instances: population and stall limit $20$, at most $60$
-rounds, $40$ inner iterations, $T_0 = 3.0$, $\eta = 0.9$, one-hot initialization, and a fixed base
-seed. The generator is \texttt{splitmix64} and no clock is read, so the table is reproducible
-exactly. The baseline is a chronological backtracking completion search written independently of the
-formulation; it is itself certified, in that every board it returns is proved to satisfy the checker.
-The converse is not proved, so its failures are reported as observations.
+\subsection{Setup}\label{sec:setup}
 
-\begin{center}\small
-\begin{tabular}{@{}lrrr rr rrr r r@{}}
+The parameters of \tabref{tab:params} are fixed across every instance, and the base seed is fixed too.
+The generator is \texttt{splitmix64} and no clock is read, so both tables are reproducible exactly.
+The baseline is a chronological backtracking completion search written independently of the
+formulation. It is itself certified, in that every board it returns is proved to satisfy the checker,
+and the column \textsf{ok} of \tabref{tab:results} is that theorem being re-checked at run time. The
+converse is not proved, so the baseline's failures are reported as observations.
+
+\subsection{Results}\label{sec:results}
+
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}lrrrr rr rrr r r@{}}
 \toprule
-& & & & \multicolumn{2}{c}{backtracking} & \multicolumn{3}{c}{CNS/BMm} & CNS/DHNm & BMm alone\\
-\cmidrule(lr){5-6}\cmidrule(lr){7-9}\cmidrule(lr){10-10}\cmidrule(lr){11-11}
-instance & $N$ & $|G|$ & $n$ & ok & \#compl. & found & rounds & $s/k$ & $s/k$ & $s/20$\\
+& & & & & \multicolumn{2}{c}{backtracking}
+& \multicolumn{3}{c}{CNS/BMm, \eqref{eq:bmm}\,+\,Alg.~2} & CNS/DHNm & BMm alone\\
+\cmidrule(lr){6-7}\cmidrule(lr){8-10}\cmidrule(lr){11-11}\cmidrule(lr){12-12}
+board & $N$ & $|G|$ & $n$ & $m$ & ok & \#compl. & hit & rounds & $s/k$ & $s/k$ & $s/20$\\
 \midrule
-Q4     & 4  & 0 & 26  & y & 2   & y & 1  & 10/10 & 10/10 & 7\\
-Q6     & 6  & 0 & 54  & y & 4   & y & 4  & 9/10  & 8/10  & 0\\
-Q8     & 8  & 0 & 90  & y & 92  & y & 3  & 10/10 & 9/10  & 0\\
-Q10    & 10 & 0 & 134 & y & 724 & n & 31 & 0/5   & 1/5   & 0\\
-Comp6  & 6  & 1 & 54  & y & 1   & n & 22 & 6/10  & 7/10  & 0\\
-Comp8  & 8  & 3 & 90  & y & 1   & y & 14 & 6/10  & 3/10  & 0\\
-Comp8b & 8  & 5 & 90  & y & 1   & y & 4  & 10/10 & 10/10 & 0\\
+\texttt{Q4}     & 4  & 0 & 26  & 18 & y & 2   & y & 1  & 10/10 & 10/10 & 7\\
+\texttt{Q5}     & 5  & 0 & 39  & 24 & y & 10  & y & 1  & 10/10 & 10/10 & 5\\
+\texttt{Q6}     & 6  & 0 & 54  & 30 & y & 4   & y & 4  & 9/10  & 8/10  & 0\\
+\texttt{Q7}     & 7  & 0 & 71  & 36 & y & 40  & y & 10 & 10/10 & 10/10 & 0\\
+\texttt{Q8}     & 8  & 0 & 90  & 42 & y & 92  & y & 3  & 10/10 & 9/10  & 0\\
+\texttt{Q9}     & 9  & 0 & 111 & 48 & y & 352 & y & 24 & 4/5   & 5/5   & 0\\
+\texttt{Q10}    & 10 & 0 & 134 & 54 & y & 724 & n & 31 & 0/5   & 1/5   & 0\\
+\midrule
+\texttt{Comp6}  & 6  & 1 & 54  & 31 & y & 1   & n & 22 & 6/10  & 7/10  & 0\\
+\texttt{Comp7}  & 7  & 1 & 71  & 37 & y & 4   & y & 8  & 10/10 & 6/10  & 0\\
+\texttt{Comp8}  & 8  & 3 & 90  & 45 & y & 1   & y & 14 & 6/10  & 3/10  & 0\\
+\texttt{Comp8b} & 8  & 5 & 90  & 47 & y & 1   & y & 4  & 10/10 & 10/10 & 0\\
 \bottomrule
 \end{tabular}
-\end{center}
-\captionof{table}{Instance sizes, completion counts, and results of the collaborative algorithms.
-Columns: board size, number of givens, number of variables $n$ from~\eqref{eq:sizes}; whether
-backtracking found a completion and whether the checker accepts the board it returned; the number of
-completions; whether CNS/BMm reached $p = 0$ at the base seed and in how many rounds; successes over
-$k$ seeds for CNS/BMm and for CNS/DHNm; and successes over $20$ seeds for a single BMm run with no
-population.}\label{tab:results}
+\caption{The eleven completable instances. Columns: board size; number of givens; the variable and
+constraint counts $n$ and $m$ of~\eqref{eq:sizes}; whether the checker accepts the board
+backtracking returned; the total number of completions; whether CNS/BMm reached $p = 0$ at the base
+seed, and in how many rounds; successes over $k$ seeds for CNS/BMm and for CNS/DHNm; and successes
+over $20$ seeds for a single BMm run with no population. Backtracking found a completion on every
+row.}\label{tab:results}
+\end{table}
 
-\medskip\noindent\emph{Why success counts and not means.} \citeref{liwang2022} reports best and worst
-objective values with means and standard deviations. That statistic is uninformative for this
-formulation: by \thmref{thm:net} the objective is integer-valued, so a run ends either at $p = 0$ or
-at $p \ge 1$, and on the blocked instances every failed run ends at exactly $1$. A mean over runs
-therefore reports little beyond the success rate, which is given directly.
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}lrrrr rr rr@{}}
+\toprule
+board & $N$ & $|G|$ & $n$ & $m$ & \#compl. & refuted & tuples & best $p$\\
+\midrule
+\texttt{Q2}     & 2 & 0 & 6  & 6  & 0 & y & $2^2 = 4$      & 1\\
+\texttt{Q3}     & 3 & 0 & 15 & 12 & 0 & y & $3^3 = 27$     & 1\\
+\texttt{Blk4}   & 4 & 1 & 26 & 19 & 0 & y & $4^3 = 64$     & 1\\
+\texttt{Blk6}   & 6 & 1 & 54 & 31 & 0 & y & $6^5 = 7776$   & 1\\
+\texttt{Blk7}   & 7 & 2 & 71 & 38 & 0 & y & $7^5 = 16807$  & 1\\
+\texttt{Attack} & 8 & 2 & 90 & 44 & 0 & y & none needed    & 1\\
+\texttt{Blk8}   & 8 & 2 & 90 & 44 & 0 & n & $8^6 = 262144$ & 1\\
+\bottomrule
+\end{tabular}
+\caption{The seven blocked instances. \textsf{refuted} is whether the absence of a completion is a
+theorem of the development rather than a verdict of the baseline; \textsf{tuples} is the enumeration
+that establishes it, over the rows the givens leave open. \texttt{Attack} needs none, its two givens
+sharing a diagonal. On every row the search found no zero on any seed, and its best value was exactly
+$1$, the least it can be by \thmref{thm:net}.}\label{tab:blocked}
+\end{table}
 
-\medskip\noindent Three observations. First, backtracking solves every completable instance and
-refutes every blocked one in times not worth tabulating; no speed claim is made for the neurodynamic
-algorithms. Second, a single BMm run without a population succeeds on $7$ of $20$ seeds at $N = 4$
-and $5$ of $20$ at $N = 5$, and on nothing from $N = 6$ upwards or on any instance with givens,
-against ten of eleven instances for the population; the collaborative element is not a refinement
-here but the difference between working and not. Third, the choice between DHNm and BMm matters on
-this problem and not on others: DHNm keeps pace on the empty boards and falls behind as the number of
-givens grows, whereas on a graph-colouring corpus formulated in the same framework the two are
-indistinguishable.
+\tabref{tab:results} and \tabref{tab:blocked} report the whole corpus, unreduced and untruncated.
+Four observations.
 
-On the blocked instances of \secref{sec:cert} the search reaches no zero on any seed, and its best
-value is exactly $1$ in every case. The completion counts are a check on the baseline, which returns
-$1,1,0,0,2,10,4,40,92,352,724$ for $n = 0,\dots,10$ on the empty boards, the classical sequence.
+\emph{1) The baseline wins.} Backtracking solves every completable instance and refutes every blocked
+one, in times not worth tabulating. No speed claim is made for the neurodynamic algorithms, and
+nothing below should be read as one.
 
-\medskip\noindent\emph{Visualization.} A run may be watched in the Lean infoview as a chessboard, one
-frame per round, with given queens drawn in black, placed queens in white, and a dashed segment
-joining every attacking pair. A segment appears exactly when one of the pairwise conditions of
-\thmref{thm:spec} fails, which is exactly when a column or diagonal constraint of $A$ carries two
-set variables, so what is watched disappearing is the residual of~\eqref{eq:p}. One widget is
-interactive: queens are placed by clicking and the solver is then run on the resulting instance
-through the proof assistant's remote-procedure-call mechanism, so the code that runs is the code the
-theorems are about.
+\emph{2) The population is not a refinement.} A single BMm run with no population succeeds on $7$ of
+$20$ seeds at $N = 4$ and $5$ of $20$ at $N = 5$, and on nothing from $N = 6$ upwards or on any
+instance with givens. The collaborative search reaches a completion on ten of the eleven rows. Here
+the collaborative element is the difference between working and not working.
+
+\emph{3) The two models separate, and only where there are givens.} On the seven empty boards DHNm
+and BMm are indistinguishable, at $53$ of $60$ seeds each. On the four boards with givens BMm is
+ahead, $32$ of $40$ against $26$. The separation is not uniform --- DHNm is the only configuration to
+reach $N = 10$ at all, once in five seeds --- and it is problem-specific: on a graph-colouring corpus
+formulated in the same framework the two are indistinguishable throughout.
+
+\emph{4) The corpus is what bounds the claim.} $N = 10$ is where the swarm stops. A purpose-built
+Hopfield network for $n$-queens~\citeref{mandziuk1995} reaches $N = 80$, on the plain problem rather
+than on Completion. The completion counts in \tabref{tab:results} are a check on the baseline, which
+returns $1,1,0,0,2,10,4,40,92,352,724$ for $n = 0,\dots,10$ on the empty boards, the classical
+sequence.
+
+\subsection{Why success counts and not means}\label{sec:stats}
+
+\citeref{liwang2022} reports best and worst objective values with means and standard deviations. That
+statistic is uninformative for this formulation. By \thmref{thm:net} the objective is integer-valued,
+with a gap of $\tfrac12$ in the energy, so a run ends either at $p = 0$ or at $p \ge 1$; and on every
+blocked instance every failed run ends at exactly $1$, as the last column of \tabref{tab:blocked}
+records. A mean over runs therefore reports little beyond the success rate, which is given directly,
+and a standard deviation reports the same thing twice.
+
+\subsection{Visualization}\label{sec:vis}
+
+\begin{figure}[t]
+\centering
+\begin{tabular}{@{}c@{\hspace{1.2em}}c@{\hspace{2.6em}}c@{\hspace{1.2em}}c@{}}
+\begin{qcpic}{0.40cm}
+  \qcboard{6}\qcgivens{0/1}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{6}\qcplace{1,3,5,0,2,4}\qcgivens{0/1}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{8}\qcgivens{0/0,1/4,2/7}
+\end{qcpic}
+&
+\begin{qcpic}{0.40cm}
+  \qcboard{8}\qcplace{0,4,7,5,2,6,1,3}\qcgivens{0/0,1/4,2/7}
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) \texttt{Comp6}} & \qclab{(b) its completion}
+& \qclab{(c) \texttt{Comp8}} & \qclab{(d) its completion}
+\end{tabular}
+\caption{Two completable instances and their completions, in the colours the widget uses: given
+queens dark, queens the solver placed light. Each instance has exactly one completion, so what is
+drawn in (b) and (d) is the unique board on which $p$ vanishes. (d) is also the lexicographically
+first of the $92$ solutions of the empty $8\times8$ board, pinned by its three
+givens.}\label{fig:comp}
+\end{figure}
+
+A run may be watched in the Lean infoview as a chessboard, one frame per round, drawn exactly as in
+\figref{fig:blocked} and \figref{fig:comp}: given queens dark, placed queens light, and a dashed
+segment joining every attacking pair as in \figref{fig:blocked}(a). A segment appears exactly when one
+of the pairwise conditions of \thmref{thm:spec} fails, which is exactly when a column or diagonal
+constraint of $\hat A$ carries two set variables, so what is watched disappearing is the residual
+of~\eqref{eq:p}. One widget is interactive: queens are placed by clicking and the solver is then run
+on the resulting instance through the proof assistant's remote-procedure-call mechanism, so the code
+that runs is the code the theorems are about.
 
 \section{From the formulation to the development}\label{sec:map}
 
-\begingroup\footnotesize
+\begin{table}[t]
+\centering\footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{center}
-\begin{tabular}{@{}p{0.40\textwidth}p{0.31\textwidth}l@{}}
+\begin{tabular}{@{}p{0.39\textwidth}p{0.30\textwidth}l@{}}
 \toprule
 statement & Lean identifier & file\\
 \midrule
@@ -495,26 +851,44 @@ the inner loop is the local field & \lstinline{netVec_eq_localField} & \texttt{Q
 low-temperature concentration & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{QUBO/Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
 \midrule
 \eqref{eq:form} is well formed & \lstinline{problem_wf}, \lstinline{problem_refines} & \texttt{Queens/Basic.lean}\src{HopfieldNet/QUBO/Instances/Queens/Basic.lean}\\
+\figref{fig:inc}, the row layout & \lstinline{rowRow}, \lstinline{colRow}, \lstinline{diagRow}, \lstinline{antiRow} & \texttt{Queens/Basic.lean}\\
+additive diagonal membership & \lstinline{onSlack} & \texttt{Queens/Basic.lean}\\
+\figref{fig:inc}, the degrees $4$, $3$, $1$ & \lstinline{rowsOf}, and the \lstinline{#guard}s pinning its size & \texttt{Queens/Basic.lean}, \texttt{Spec.lean}\src{HopfieldNet/QUBO/Instances/Queens/Spec.lean}\\
 \thmref{thm:iff}, soundness & \lstinline{decode_isQueens} & \texttt{Queens/Basic.lean}\\
 \thmref{thm:iff}, completeness & \lstinline{encode_penalty_zero} & \texttt{Queens/Basic.lean}\\
 \thmref{thm:iff}, the equivalence & \lstinline{exists_zero_iff_queens} & \texttt{Queens/Basic.lean}\\
-\thmref{thm:spec} & \lstinline{isQueens_iff}, \lstinline{exists_zero_iff_completion} & \texttt{Queens/Spec.lean}\src{HopfieldNet/QUBO/Instances/Queens/Spec.lean}\\
+\thmref{thm:spec} & \lstinline{isQueens_iff}, \lstinline{exists_zero_iff_completion} & \texttt{Queens/Spec.lean}\\
 agreement with an independent checker & \lstinline{isQueens_eq_naive_four/_five} & \texttt{Queens/Spec.lean}\\
 \thmref{thm:min} & \lstinline{exists_minEnergy_iff} & \texttt{Queens/Converge.lean}\src{HopfieldNet/QUBO/Instances/Queens/Converge.lean}\\
-blocked instances & \lstinline{blocked4_no_queens}, \lstinline{blocked6_no_queens} & \texttt{Queens/Examples.lean}\src{HopfieldNet/QUBO/Instances/Queens/Examples.lean}\\
-\dots\ and \texttt{blocked7} & \lstinline{blk7_no_queens} & \texttt{Queens/Bench.lean}\src{HopfieldNet/QUBO/Instances/Queens/Bench.lean}\\
+\figref{fig:blocked}(a), (c) & \lstinline{attacking_no_queens}, \lstinline{blocked4_no_queens} & \texttt{Queens/Examples.lean}\src{HopfieldNet/QUBO/Instances/Queens/Examples.lean}\\
+\figref{fig:blocked}(b) & \lstinline{blk7_no_queens}, \lstinline{blk7_no_zero} & \texttt{Queens/Bench.lean}\src{HopfieldNet/QUBO/Instances/Queens/Bench.lean}\\
 \midrule
 the baseline returns only completions & \lstinline{solve_isQueens} & \texttt{Queens/Baseline.lean}\src{HopfieldNet/QUBO/Instances/Queens/Baseline.lean}\\
-completion counts & \lstinline{count} & \texttt{Queens/Baseline.lean}\\
+\figref{fig:blocked}(d), (e), and the counts & \lstinline{count} & \texttt{Queens/Baseline.lean}\\
 Algorithm~2 & \lstinline{search} & \texttt{QUBO/Search.lean}\src{HopfieldNet/QUBO/Search.lean}\\
 \eqref{eq:dhnm}, \eqref{eq:bmm} & \lstinline{dhnmStep}, \lstinline{bmmStep} & \texttt{QUBO/Dynamics.lean}\src{HopfieldNet/QUBO/Dynamics.lean}\\
-\cref{tab:results} & \lstinline{table} & \texttt{Queens/Bench.lean}\\
+\tabref{tab:results}, \tabref{tab:blocked} & \lstinline{table}, \lstinline{tableBlocked} & \texttt{Queens/Bench.lean}\\
+\figref{fig:comp}, the two instances & \lstinline{small6}, \lstinline{completion8} & \texttt{Queens/Examples.lean}\\
+every board drawn in this article & the \lstinline{#guard}s of \secref{sec:map} & \texttt{Queens/Figures.lean}\src{HopfieldNet/QUBO/Instances/Queens/Figures.lean}\\
 the widgets & \lstinline{animate}, \lstinline{board} & \texttt{Queens/Widget.lean}, \texttt{Interactive.lean}\src{HopfieldNet/QUBO/Instances/Queens/Interactive.lean}\\
 \bottomrule
 \end{tabular}
-\end{center}
-\captionof{table}{Each statement of this article, its Lean identifier, and its file.}\label{tab:map}
-\endgroup
+\caption{Each statement of this article, its Lean identifier, and its file.}\label{tab:map}
+\end{table}
+
+\tabref{tab:map} lists every statement made above against the identifier that discharges it.
+
+The figures are included, and in their case the correspondence is checked rather than asserted. A
+chessboard in a paper is a claim about the development that no proof assistant sees, so every board
+drawn above is restated in the development as a \lstinline{#guard}, which fails during elaboration if
+it stops holding: that \figref{fig:blocked}(b) is the instance \texttt{Blk7} with those two givens,
+that they do not attack each other, and that the board admits no completion; that
+\figref{fig:blocked}(d) and (e) are the only two completions of the empty $4\times4$ board and that
+neither uses the corner; that the boards of \figref{fig:comp} are the unique completions of the
+instances beside them; and that each capsule of \figref{fig:inc} covers exactly the squares of the row
+of $\hat A$ it is labelled with. The size formulas~\eqref{eq:sizes} are checked there against both
+corpora at once rather than read off the printed tables. If a figure and the code ever disagree, the
+build stops.
 
 \section{Concluding remarks}\label{sec:concl}
 
@@ -524,24 +898,23 @@ the checker against which those properties are stated is proved to decide the ch
 written over the integers, and the objective is proved to be the energy of a $\{0,1\}$ Boltzmann
 machine whose minimizers are exactly the completions. Collaborative neurodynamic optimization
 algorithms based on a population of discrete Hopfield networks or Boltzmann machines are applied to
-the formulated problem without modification, and experimental results on eleven completable and seven
-blocked instances are elaborated, six of the latter refuted by proof. No variable reduction
-algorithm is proposed, and the differences
-between this formulation and the Sudoku formulation of~\citeref{liwang2022} are tabulated in
-\secref{sec:diff} rather than assumed away.
+the formulated problem without modification, and experimental results on eleven completable and
+seven blocked instances are elaborated, six of the latter refuted by proof. No variable reduction
+algorithm is proposed, and the differences between this formulation and the Sudoku formulation
+of~\citeref{liwang2022} are tabulated in \tabref{tab:diff} rather than assumed away.
 
 What the certification buys is not speed. A backtracking search outperforms the neurodynamic
-algorithms on every instance, and a purpose-built Hopfield network for $n$-queens~\citeref{mandziuk1995}
-outperforms them at sizes this formulation does not reach. What it buys is that a run which ends
-without a zero has established a property of the chessboard, and that the objective being descended
-is provably the energy of the network said to be descending it.
+algorithms on every instance, and a purpose-built Hopfield network for
+$n$-queens~\citeref{mandziuk1995} outperforms them at sizes this formulation does not reach. What it
+buys is that a run which ends without a zero has established a property of the chessboard, and that
+the objective being descended is provably the energy of the network said to be descending it.
 
-Two directions remain. The trajectory is not certified: \eqref{eq:dhnm} and~\eqref{eq:bmm}
-accumulate their net input and are not the single-neuron dynamics for which~\citeref{hnbm} proves
-convergence, so a solver restricted to that dynamics would be certified from the board to the last
-update, and none is. And the variable reduction stage absent from \secref{sec:diff} would, if
-implemented and certified, make the comparison with~\citeref{liwang2022} a fair one; at present it
-is not.
+Two directions remain. The trajectory is not certified, as \secref{sec:stop} sets out:
+\eqref{eq:dhnm} and~\eqref{eq:bmm} accumulate their net input and are not the single-neuron dynamics
+for which~\citeref{hnbm} proves convergence, so a solver restricted to that dynamics would be
+certified from the board to the last update, and none is. And the variable reduction stage absent
+from \tabref{tab:diff} would, if implemented and certified, make the comparison
+with~\citeref{liwang2022} a fair one; at present it is not.
 
 \section*{Acknowledgements}
 % TODO

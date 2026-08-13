@@ -156,8 +156,10 @@ Two differences from `runOne`, both forced. `Model.dhnm` is the hard-threshold r
 momentum, so it consumes no randomness at all — `dhnmRun` ignores the generator, and the swarm's
 only stochasticity is initialisation, the PSO coefficients and mutation. And the diversity
 threshold is `0.9` rather than BMm's `0.4`: that model-specific split was recovered on Sudoku, and
-it transfers — at `0.4` DHNm fails on the empty `8 × 8` where at `0.9` it succeeds, which is
-evidence the constant is principled rather than an artifact of the instance it was tuned on. -/
+it transfers — on the empty `8 × 8` DHNm succeeds on 4 of 10 seeds at `0.4` against 9 of 10 at
+`0.9`, which is evidence the constant is principled rather than an artifact of the instance it was
+tuned on. (An earlier version of this note said DHNm *fails* at `0.4`; that is true of the base seed
+only, not of the seed set — measured 4/10.) -/
 def runOneD (I : Instance) (seed : Nat) : SearchResult :=
   search (problem I) Model.dhnm
     { N := 20, M := 20, maxOuter := 60, model := benchModel, divThreshold := 0.9,

@@ -243,11 +243,12 @@ with a geometric cooling schedule $T(t) = T_0\eta^t$ for $0 < \eta < 1$. Equatio
 and~\eqref{eq:bmm} are equations (3) and (6) of~\citeref{liwang2022}, and are the recurrences
 actually iterated in \secref{sec:exp}.
 
-\emph{3) Collaborative search.} A population of $N$ such networks is run concurrently. The best state
+\emph{3) Collaborative search.} A population of $K$ such networks is run concurrently
+--- \citeref{liwang2022} writes $N$, which here is the board size. The best state
 found is retained as the incumbent $x^{*}$; the initial states are then re-initialized by a particle
 swarm rule, and a diversity measure over the population triggers bit-flip mutation when the
-population collapses onto $x^{*}$. Termination is $M$ consecutive rounds without improvement to
-$x^{*}$.
+population collapses onto $x^{*}$. Termination is a run of more than $M$ consecutive rounds without
+improvement to $x^{*}$.
 
 \subsection{What is proved about these models}\label{sec:hnbm}
 
@@ -299,7 +300,10 @@ $2N-3$ in each direction. The number of variables is therefore
   m \;=\; 6N - 6 + |G| ,
 \end{equation}
 where $m$ counts the constraints; for $N = 8$ this is $n = 90$ and $m = 42$ with no givens. Both
-formulas are confirmed on every row of \tabref{tab:results} and \tabref{tab:blocked}.
+formulas presume $N \ge 2$, as every instance below does; the development truncates $2N-3$ at zero, so
+a $1\times1$ board carries one variable and two constraints rather than the counts~\eqref{eq:sizes}
+returns. Otherwise they are confirmed on every row of \tabref{tab:results} and
+\tabref{tab:blocked}.
 
 \subsection{Quadratic penalties}\label{sec:pen}
 
@@ -378,8 +382,15 @@ $r_{N+j}$. \figref{fig:inc} draws every row through one square at $N = 4$.
 The figure also shows why the degrees are not uniform, which is what makes $\theta$ half-integral. An
 interior square lies in four rows. A corner lies in three: one of its two diagonals is the corner
 itself, and a single square cannot carry two queens, so no constraint is generated for it. An
-auxiliary variable lies in exactly one row. Hence $\deg(u) \in \{4,3,1\}$ and, by~\eqref{eq:WT},
-$\theta_u \in \{-2,-\tfrac32,-\tfrac12\}$.
+auxiliary variable lies in exactly one row. And a square carrying a given lies in one row more than
+it otherwise would, namely its own constraint~\eqref{eq:form-giv}. Hence
+\begin{equation}\label{eq:degs}
+  \deg(u) \in \{1,3,4,5\}, \qquad \theta_u \in \{-\tfrac12,-\tfrac32,-2,-\tfrac52\},
+\end{equation}
+the odd degrees being what make $\theta$ half-integral, and $5$ occurring only at an interior square
+that carries a given. \figref{fig:inc} draws an empty board, where the degrees are just $4$, $3$ and
+$1$; on \texttt{Comp8} of \tabref{tab:results}, whose givens include both an interior square and a
+corner, all four values occur.
 
 One detail of the layout is worth recording, because it is where a transcription error would go
 unnoticed. A diagonal is a set of squares on which $i - j$ is constant and an anti-diagonal one on
@@ -418,10 +429,12 @@ constraint families & four, all \emph{exactly-one}, (10a)--(10d) &
 auxiliary variables & none needed &
   $2(2N-3)$ needed, at-most-one not being an equality\\
 column degree of $\hat A$ & uniformly $4$ &
-  $4$ at an interior square, $3$ at each of the four corners, $1$ at an auxiliary variable\\
+  $4$ at an interior square, $3$ at a corner, $1$ at an auxiliary variable, and one more at a square
+  carrying a given\\
 threshold & $\theta = -2\cdot\mathbf{1}$, uniform &
-  $\theta_u \in \{-2, -\tfrac32, -\tfrac12\}$, non-uniform and half-integral\\
-variable reduction & Algorithm~1; reduces $729$ variables to between $0$ and $28\%$, and solves five
+  $\theta_u \in \{-\tfrac12, -\tfrac32, -2, -\tfrac52\}$, non-uniform and half-integral at odd
+  degrees\\
+variable reduction & Algorithm~1; leaves between $0$ and $209$ of $729$ variables, and solves five
   of ten instances outright & \textbf{no counterpart implemented}; see below\\
 givens & enforced by (10e), after reduction &
   enforced as one-variable constraints, with no reduction stage\\
@@ -449,8 +462,8 @@ the queens formulation makes to the Sudoku one, and it is what accounts for the 
 variables in~\eqref{eq:sizes}.
 
 \emph{2) The degrees are not uniform.} In the Sudoku formulation every variable occurs in exactly
-four constraints, so $\theta$ is the constant $-2$. Here the degree is $4$, $3$ or $1$, as
-\figref{fig:inc} shows, and $\theta_u$ is correspondingly $-2$, $-\tfrac32$ or $-\tfrac12$.
+four constraints, so $\theta$ is the constant $-2$. Here it is $1$, $3$, $4$ or $5$
+by~\eqref{eq:degs}, and $\theta_u$ correspondingly $-\tfrac12$, $-\tfrac32$, $-2$ or $-\tfrac52$.
 Half-integral thresholds are harmless for~\eqref{eq:E}, whose $\theta$ is real-valued, but $\theta$
 is stored in an integer array so that the inner loop is exact integer arithmetic; what is stored is
 therefore $2\theta_u = -\deg(u)$, and it is halved once, where the real-valued energy is defined.
@@ -594,8 +607,8 @@ that instance, from a check over $7^5 = 16807$ tuples. \texttt{Blk4} illustrates
 instance dies: the empty $4\times4$ board has exactly two completions, drawn as (d) and (e), and
 neither uses the corner, so pinning a queen there is fatal. That a corner queen is nonetheless
 harmless from $N = 7$ on is visible in \tabref{tab:results}, where \texttt{Comp7} is the same
-instance at $N = 7$ and has four completions; the counts for $\langle n, \{(0,0)\}\rangle$ at
-$n = 4,\dots,10$ are $0,2,0,4,4,28,64$.
+instance at $N = 7$ and has four completions; the counts for $\langle N, \{(0,0)\}\rangle$ at
+$N = 4,\dots,10$ are $0,2,0,4,4,28,64$.
 
 The seventh instance, \texttt{Blk8}, is an $8\times8$ board with two non-attacking givens. It leaves
 $8^6 = 262144$ tuples open, beyond what kernel reduction will do here, and it is reported as an
@@ -626,14 +639,14 @@ enumeration instead.
 \textbf{Algorithm 2} (of~\citeref{liwang2022}), as applied to~\eqref{eq:form}.\\
 \midrule
 \textbf{Input:} the network $(W,\theta)$ of~\eqref{eq:WT}; a model $\mathcal{M} \in
-\{\text{DHNm}~\eqref{eq:dhnm},\ \text{BMm}~\eqref{eq:bmm}\}$; and $N$, $M$, $c_0$, $c_1$, $c_2$,
+\{\text{DHNm}~\eqref{eq:dhnm},\ \text{BMm}~\eqref{eq:bmm}\}$; and $K$, $M$, $c_0$, $c_1$, $c_2$,
 $P_m$, $\mathcal{T}$, $T_0$, $\eta$.\\
 \textbf{Output:} the incumbent $x^{*}$ and its objective value $p(x^{*})$.\\
 \midrule
 \emph{1} \quad draw $x^{(i)}(0)$ with one variable set in each board row, $v^{(i)} \sim
 U[-1,1]^{n}$; set $\hat x^{(i)} \leftarrow x^{(i)}(0)$ and $x^{*} \leftarrow \arg\min_i
 p(\hat x^{(i)})$\\
-\emph{2--7} \quad\, \textbf{repeat:} run each of the $N$ copies of $\mathcal{M}$ from $x^{(i)}(0)$ to
+\emph{2--7} \quad\, \textbf{repeat:} run each of the $K$ copies of $\mathcal{M}$ from $x^{(i)}(0)$ to
 equilibrium, giving $x^{(i)}$; set $\hat x^{(i)} \leftarrow x^{(i)}$ whenever
 $p(x^{(i)}) < p(\hat x^{(i)})$\\
 \emph{8--14} \quad $x^{*} \leftarrow \arg\min_i p(\hat x^{(i)})$ if that improves on $x^{*}$, and
@@ -641,11 +654,11 @@ reset the stall counter; otherwise increment it. Exit if $p(x^{*}) = 0$\\
 \emph{15--20} \, $v^{(i)} \leftarrow c_0 v^{(i)} + c_1 r_1 (\hat x^{(i)} - x^{(i)})
 + c_2 r_2 (x^{*} - x^{(i)})$ with $r_1, r_2 \sim U[0,1]$, then
 $x^{(i)}(0) \leftarrow \mathrm{round}\bigl(x^{(i)}(0) + v^{(i)}\bigr)$\\
-\emph{21--24} \, $\delta \leftarrow \frac{1}{Nn}\sum_i \lVert \hat x^{(i)} - x^{*}\rVert_2$;
+\emph{21--24} \, $\delta \leftarrow \frac{1}{Kn}\sum_i \lVert \hat x^{(i)} - x^{*}\rVert_2$;
 \ \textbf{if} $\delta\sqrt{n} < \mathcal{T}$ \textbf{then} flip each bit of every $x^{(i)}(0)$ with
 probability $P_m$\\
-\quad\ \ \ \ \ \ \ \, \textbf{until} $p(x^{*}) = 0$, or $M$ consecutive rounds pass without
-improvement, or the round cap is reached\\
+\quad\ \ \ \ \ \ \ \, \textbf{until} $p(x^{*}) = 0$, or the stall counter exceeds $M$, or the round
+cap is reached\\
 \bottomrule
 \end{tabular}
 \caption{The collaborative search, with the step numbers of~\citeref{liwang2022}. The population is
@@ -657,7 +670,7 @@ discussed in \secref{sec:params}.}\label{fig:alg}
 \end{figure}
 
 Algorithm~2 of~\citeref{liwang2022}, reproduced as \figref{fig:alg}, is applied without modification
-to its structure. A population of $N$ copies of DHNm \eqref{eq:dhnm} or BMm \eqref{eq:bmm} is run to
+to its structure. A population of $K$ copies of DHNm \eqref{eq:dhnm} or BMm \eqref{eq:bmm} is run to
 equilibrium; the incumbent $x^{*}$ is updated from the best state found; the initial states are
 re-initialized by the particle swarm rule; and bit-flip mutation fires when the diversity of the
 population falls below a threshold $\mathcal{T}$. The only problem-specific input is the list of
@@ -674,7 +687,7 @@ each board row, that is to say the rows $r_0,\dots,r_{N-1}$ of \figref{fig:inc}.
 \toprule
 & meaning & value\\
 \midrule
-$N$            & population size                                     & $20$\\
+$K$            & population size                                     & $20$\\
 $M$            & stall limit, in rounds                              & $20$\\
                & round cap                                           & $60$\\
                & inner iterations per equilibration                  & $40$\\
@@ -688,8 +701,9 @@ $\mathcal{T}$  & diversity threshold, as a fraction of $\delta_{\max} = 1/\sqrt{
                & $0.4$ (BMm), $0.9$ (DHNm)\\
 \bottomrule
 \end{tabular}
-\caption{The parameters of \figref{fig:alg}, as used for every row of \tabref{tab:results} and
-\tabref{tab:blocked}. \emph{Not one of these values is stated in~\citeref{liwang2022}}; all were
+\caption{The parameters of \figref{fig:alg}, as used for every \emph{collaborative} run in
+\tabref{tab:results} and \tabref{tab:blocked}. \emph{Not one of these values is stated
+in~\citeref{liwang2022}}; all were
 recovered experimentally, and $c_2$ and $\mathcal{T}$ are not merely a matter of
 tuning.}\label{tab:params}
 \end{table}
@@ -708,8 +722,8 @@ is therefore at most $1/\sqrt{n}$; a fixed threshold consequently means somethin
 instance, and on a large one fires on every round. The threshold is compared here against the
 diversity scaled by $\sqrt{n}$, as step 22 of \figref{fig:alg} records. The recovered value is
 model-specific, $0.9$ for DHNm against $0.4$ for BMm; having been fitted on Sudoku it transfers, in
-that on the empty $8\times8$ board DHNm fails at BMm's $0.4$ and succeeds on nine of ten seeds at
-$0.9$.
+that on the empty $8\times8$ board DHNm succeeds on four of ten seeds at BMm's $0.4$ against nine of
+ten at its own $0.9$.
 
 Two further choices are interpretations rather than numbers, and are recorded because
 \citeref{liwang2022} does not settle them. Step 1 there says only that
@@ -727,7 +741,8 @@ seeds $x^{(i)}(0)$, and never to $x^{*}$.
 The parameters of \tabref{tab:params} are fixed across every instance, and the base seed is fixed too.
 The generator is \texttt{splitmix64} and no clock is read, so both tables are reproducible exactly.
 The baseline is a chronological backtracking completion search written independently of the
-formulation. It is itself certified, in that every board it returns is proved to satisfy the checker,
+formulation. It is itself certified, in that every board it returns is proved to satisfy the checker
+--- under the same hypothesis as \thmref{thm:iff}, that the givens lie on the board ---
 and the column \textsf{ok} of \tabref{tab:results} is that theorem being re-checked at run time. The
 converse is not proved, so the baseline's failures are reported as observations.
 
@@ -762,7 +777,9 @@ constraint counts $n$ and $m$ of~\eqref{eq:sizes}; whether the checker accepts t
 returned; the total number of completions; whether the collaborative search driving BMm~\eqref{eq:bmm}
 reached $p = 0$ at the base seed, and in how many rounds; its successes over $k$ seeds; the same
 driving DHNm~\eqref{eq:dhnm}; and successes over $20$ seeds for a single BMm run with no population at
-all. Backtracking found a completion on every row.}\label{tab:results}
+all. That last run is one annealed pass of~\eqref{eq:bmm}, $400$ sweeps at $T = 3.0\cdot0.99^{t}$ from
+the same base seed, and is the one configuration here not covered by \tabref{tab:params}.
+Backtracking found a completion on every row.}\label{tab:results}
 \end{table}
 
 \begin{table}[t]
@@ -811,7 +828,7 @@ formulated in the same framework the two are indistinguishable throughout.
 and DHNm succeeds on one of five, and nothing larger was run. A purpose-built
 Hopfield network for $n$-queens~\citeref{mandziuk1995} reaches $N = 80$, on the plain problem rather
 than on Completion. The completion counts in \tabref{tab:results} are a check on the baseline, which
-returns $1,1,0,0,2,10,4,40,92,352,724$ for $n = 0,\dots,10$ on the empty boards, the classical
+returns $1,1,0,0,2,10,4,40,92,352,724$ for $N = 0,\dots,10$ on the empty boards, the classical
 sequence.
 
 \subsection{Why success counts and not means}\label{sec:stats}
@@ -906,7 +923,7 @@ agreement with an independent checker & \lstinline{isQueens_eq_naive_four/_five}
 the baseline returns only completions & \lstinline{solve_isQueens} & \texttt{Baseline.lean}\src{HopfieldNet/QUBO/Instances/Queens/Baseline.lean}\\
 \figref{fig:blocked}(d), (e), and the counts & \lstinline{count} & \texttt{Baseline.lean}\\
 \tabref{tab:results}, \tabref{tab:blocked} & \lstinline{table}, \lstinline{tableBlocked} & \texttt{Bench.lean}\\
-\tabref{tab:params} & \lstinline{SearchConfig}, \lstinline{benchModel} & \texttt{Search.lean}, \texttt{Bench.lean}\\
+\tabref{tab:params} & \lstinline{SearchConfig}, \lstinline{benchModel} & \texttt{QUBO/Search.lean}, \texttt{Bench.lean}\\
 every board drawn above & the \lstinline{#guard}s of \texttt{Figures.lean} & \texttt{Figures.lean}\src{HopfieldNet/QUBO/Instances/Queens/Figures.lean}\\
 the animated widget & \lstinline{animate} & \texttt{Widget.lean}\src{HopfieldNet/QUBO/Instances/Queens/Widget.lean}\\
 the interactive widget & \lstinline{board}, \lstinline{queensSolve} & \texttt{Interactive.lean}\src{HopfieldNet/QUBO/Instances/Queens/Interactive.lean}\\
@@ -914,8 +931,8 @@ the interactive widget & \lstinline{board}, \lstinline{queensSolve} & \texttt{In
 \end{tabular}
 \caption{Each statement of this article, its Lean identifier, and its file. Files in the first block
 are under \texttt{HopfieldNet/QUBO/}, those in the second and third under
-\texttt{HopfieldNet/QUBO/Instances/Queens/}; each link resolves to the file
-itself.}\label{tab:map}
+\texttt{HopfieldNet/QUBO/Instances/Queens/} except where a path is shown; each link resolves to the
+file itself.}\label{tab:map}
 \end{table}
 
 \tabref{tab:map} lists every statement made above against the identifier that discharges it.

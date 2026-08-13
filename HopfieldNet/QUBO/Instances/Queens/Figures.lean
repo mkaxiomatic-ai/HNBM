@@ -29,20 +29,20 @@ namespace Figures
 open QUBO.Queens.Bench
 
 /-- Whether the two givens of a figure attack each other, stated over `ℤ` with real subtraction, as
-`Queens.Attack` is. Used to check that Figure 2(a) draws its dashed segment and 2(b) does not. -/
+`Queens.Attack` is. Used to check that `fig:blocked`(a) draws its dashed segment and (b) does not. -/
 def attacks (i a k b : Int) : Bool := (a == b) || (i - a == k - b) || (i + a == k + b)
 
 /-- An instance matches what a figure draws: the board size and the givens, in the drawn order. -/
 def drawn (I : Instance) (n : Nat) (g : Array (Nat × Nat)) : Bool :=
   I.size == n && I.givens == g
 
-/-! ## Figure 1 --- the rows of `Â` through one square
+/-! ## `fig:inc` --- the rows of `Â` through one square
 
 The left panel draws four capsules through the square `(1,2)` of the `4 × 4` board, labelled
 `r₁, r₆, r₉, r₁₅`; the right panel draws three through the corner `(0,0)`, labelled `r₀, r₄, r₁₀`,
 and a dotted ring on the anti-diagonal that generates no row.
 
-The board of Figure 1 has the size the caption states, `n = 26` and `m = 18`: -/
+The board of `fig:inc` has the size the caption states, `n = 26` and `m = 18`: -/
 
 #guard
   let I : Instance := ⟨4, #[]⟩
@@ -81,7 +81,8 @@ picture of `Â` rather than a decoration. Left panel, then right. -/
     && (cellsOf 10 == [(0,0), (1,1), (2,2), (3,3)])
 
 /-! The degrees the caption states: `4` at an interior square, `3` at each of the four corners, `1` at
-a slack. This is the `θ ∈ {-2, -3/2, -1/2}` of the paper's §3.2, at the size drawn. -/
+a slack. These are the degrees of an *empty* board; a square carrying a given meets one row more, and
+the guard below pins that case, which the paper's eq. (6) in §3.3 enumerates. -/
 
 #guard
   let I : Instance := ⟨4, #[]⟩
@@ -91,6 +92,31 @@ a slack. This is the `θ ∈ {-2, -3/2, -1/2}` of the paper's §3.2, at the size
     && (I.rowsOf (I.cellVar 3 0)).size == 3
     && (I.rowsOf (I.cellVar 3 3)).size == 3
     && (I.rowsOf (I.slackVar 0)).size == 1
+
+/-! **Degrees once there are givens**, which is what eq. (6) of §3.3 enumerates and what the empty
+board above cannot exhibit. A square carrying a given lies in its given row too, so an interior given
+has degree `5` and a corner given `4`; since `Problem.theta` stores `2θ = -deg`, the stored value `-5`
+means `θ = -5/2`. All four degrees `{1,3,4,5}` occur on `Comp8`, whose givens include an interior
+square and a corner. Pinned across the whole corpus, so that no instance can quietly acquire a degree
+the paper does not list. -/
+
+#guard
+  let I := completion8                              -- ⟨8, #[(0,0), (1,4), (2,7)]⟩
+  (I.rowsOf (I.cellVar 1 4)).size == 5              -- interior given
+    && (I.rowsOf (I.cellVar 2 7)).size == 5          -- interior given, on an edge but not a corner
+    && (I.rowsOf (I.cellVar 0 0)).size == 4          -- corner given: 3 + its given row
+    && (I.rowsOf (I.cellVar 3 3)).size == 4          -- plain interior
+    && (I.rowsOf (I.cellVar 7 7)).size == 3          -- plain corner
+    && (I.rowsOf (I.slackVar 0)).size == 1
+    && (problem I).theta.getD (I.cellVar 1 4) 0 == -5   -- 2θ = -deg, so θ = -5/2
+    && (problem I).theta.getD (I.cellVar 0 0) 0 == -4
+    && ((List.range (problem I).nvars).map fun u =>
+          (problem I).theta.getD u 0).eraseDups.mergeSort (· ≤ ·) == [-5, -4, -3, -1]
+
+#guard
+  (corpus ++ blockedCorpus).all fun r =>
+    ((List.range r.I.nvars).map fun u => (r.I.rowsOf u).size).all fun d =>
+      d == 1 || d == 3 || d == 4 || d == 5
 
 /-! The anti-diagonal through `(0,0)` really is the lone square, so the dotted ring is drawn on a set
 that exists and a row that does not: no row of `Â` contains `(0,0)` and nothing else. -/
@@ -130,7 +156,7 @@ facts that make the two families the families they are named after: constant `i 
       let cs := cellsOn (D + d)
       cs.length ≥ 2 && cs.all fun c => c.2 == (cs.getD 0 (0, 0)).2)     -- `i + j` constant
 
-/-! ## Figure 2 --- three blocked instances, and the two boards that refute one of them
+/-! ## `fig:blocked` --- three blocked instances, and the two boards that refute one of them
 
 **(a) `Attack`.** An `8 × 8` board with the two givens drawn, and the caption's reason: they share a
 diagonal, which is why the dashed segment is drawn and why no enumeration is needed. -/
@@ -148,7 +174,8 @@ dead anyway. -/
   drawn blocked7 7 #[(0, 0), (1, 6)]
     && Baseline.count blocked7 == 0
     && !(attacks 0 0 1 6)
-    && (0 != 1)               -- and they are on different rows, so the pair is a legal placement
+    -- and the two givens really are on distinct rows, read off the instance rather than assumed
+    && ((blocked7.givens.getD 0 (0, 0)).1 != (blocked7.givens.getD 1 (0, 0)).1)
 
 /-! **(c) `Blk4`.** A single corner queen at `N = 4`. -/
 
@@ -169,20 +196,20 @@ claims are checked, and the drawn placements themselves. -/
     && Baseline.count I == 2
 
 /-! A corner queen is fatal at `N = 4` and `N = 6` and harmless from `N = 7`, as the caption of
-Figure 2 and §4.5 both state, with the counts §4.5 prints. -/
+`fig:blocked` and §4.5 both state, with the counts §4.5 prints. -/
 
 #guard
   ((List.range 7).map fun k => Baseline.count ⟨k + 4, #[(0, 0)]⟩) == [0, 2, 0, 4, 4, 28, 64]
 
-/-! `Blk8` is the seventh blocked instance, the one Table 2 marks as *not* refuted by proof. It is not
-drawn in Figure 2, and the reason given is the number of open tuples. -/
+/-! `Blk8` is the seventh blocked instance, the one `tab:blocked` marks as *not* refuted by proof. It is
+not drawn in `fig:blocked`, and the reason given is the number of open tuples. -/
 
 #guard
   drawn blocked8 8 #[(0, 0), (1, 2)]
-    && blocked8.size - blocked8.ngivens == 6      -- six rows left open, hence the 8^6 of Table 2
+    && blocked8.size - blocked8.ngivens == 6      -- six rows left open, hence the 8^6 of `tab:blocked`
     && Baseline.count blocked8 == 0
 
-/-! ## Figure 3 --- two completable instances and their completions
+/-! ## `fig:comp` --- two completable instances and their completions
 
 **(a), (b) `Comp6`.** The instance drawn, its unique completion drawn beside it, and the caption's
 claim that the completion is unique. -/
@@ -205,7 +232,7 @@ givens. -/
     && Baseline.solve (empty 8) == some #[0, 4, 7, 5, 2, 6, 1, 3]
     && Baseline.count (empty 8) == 92
 
-/-! The given queens drawn dark in Figure 3 sit on squares the completion occupies, which is why
+/-! The given queens drawn dark in `fig:comp` sit on squares the completion occupies, which is why
 overdrawing them does not change the board: every given agrees with the solution. -/
 
 #guard
@@ -221,6 +248,18 @@ tables. Checked here on both corpora at once, rather than read off the printed t
   (corpus ++ blockedCorpus).all fun r =>
     r.I.nvars == r.I.size ^ 2 + 4 * r.I.size - 6
       && r.I.nrows == 6 * r.I.size - 6 + r.I.ngivens
+
+/-! **Where those formulas stop.** §3.1 now says they presume `N ≥ 2`. They do: at `N = 1` the board
+carries one variable and two constraints while `N² + 4N - 6` and `6N - 6` both truncate to `0` in `ℕ`.
+At `N = 0` the two happen to agree, both being `0`. -/
+
+#guard
+  let I1 : Instance := ⟨1, #[]⟩
+  let I0 : Instance := ⟨0, #[]⟩
+  I1.nvars == 1 && I1.nrows == 2                          -- what the development gives
+    && 1 ^ 2 + 4 * 1 - 6 == 0 && 6 * 1 - 6 == 0           -- what the formulas give: not equal
+    && I0.nvars == 0 && I0.nrows == 0                     -- and they agree at N = 0
+    && 0 ^ 2 + 4 * 0 - 6 == 0 && 6 * 0 - 6 == 0
 
 /-! The corpus is the size the abstract claims: eleven completable boards, seven blocked. -/
 

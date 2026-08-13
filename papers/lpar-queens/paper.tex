@@ -210,11 +210,12 @@ states, and by \cref{lem:int} every infeasible state lies at least $\tfrac12$ ab
 
 That gap of $\tfrac12$ does not shrink as the problem grows, so on a finite state space the Boltzmann
 weight of an infeasible state is smaller than a feasible one's by a factor of at least $e^{-1/2T}$;
-with the uniqueness result of \secref{sec:hnbm} this gives that the chain's equilibrium distribution
-concentrates on the solutions as $T \to 0^{+}$.
+with the uniqueness result of \secref{sec:hnbm} this gives that, provided the instance has a solution
+at all, the chain's equilibrium distribution concentrates on the solutions as $T \to 0^{+}$.
 
 \medskip\noindent\textbf{Where the certification stops.} We identify the \emph{objective} with the
-energy, and prove the \emph{integer routine} in the solver's inner loop equal to the local field. We
+energy, and prove the \emph{integer routine} in the solver's inner loop equal to twice the local
+field, the factor of two being the one that lets $\theta$ be stored doubled. We
 do \emph{not} certify the \emph{trajectory}: equations~(3) and~(6) of~\citeref{liwang2022} accumulate
 their input, $u \leftarrow u + (Wx-\theta)$, which is not the single-neuron update of
 \secref{sec:hnbm}, and the two agree only on the first inner iteration, when $u$ is still zero. So the
@@ -527,9 +528,9 @@ canonical form \eqref{eq:p}, Listing~\ref{lst:problem} & \lstinline{Problem} & \
 \thmref{thm:net}, the objective is an energy & \lstinline{zeroOneHamiltonian_eq} & \texttt{QUBO/Net.lean}\src{HopfieldNet/QUBO/Net.lean}\\
 minimizers are the feasible points & \lstinline{energy_eq_min_iff} & \texttt{QUBO/Minimizers.lean}\\
 the energy gap is at least $\tfrac12$ & \lstinline{half_le_energy_sub_min} & \texttt{QUBO/Minimizers.lean}\\
-the inner loop computes the local field & \lstinline{netVec_eq_localField} & \texttt{QUBO/Refine.lean}\src{HopfieldNet/QUBO/Refine.lean}\\
+the inner loop is twice the local field & \lstinline{netVec_eq_localField} & \texttt{QUBO/Refine.lean}\src{HopfieldNet/QUBO/Refine.lean}\\
 descent reaches a stable state & \lstinline{exists_stable} & \texttt{QUBO/Converge.lean}\src{HopfieldNet/QUBO/Converge.lean}\\
-equilibrium concentrates as $T\to0^{+}$ & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{QUBO/Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
+equilibrium concentrates, given a solution & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{QUBO/Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
 \midrule
 the queens encoding is well formed & \lstinline{problem_wf}, \lstinline{problem_refines} & \texttt{Queens/Basic.lean}\src{HopfieldNet/QUBO/Instances/Queens/Basic.lean}\\
 \thmref{thm:iff}, soundness & \lstinline{decode_isQueens} & \texttt{Queens/Basic.lean}\\

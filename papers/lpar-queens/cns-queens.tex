@@ -337,10 +337,11 @@ the thresholds are determined by the degrees alone.
   \qcrule{cDiag}{0}{1}{2}{3}
   \qcrule{cAnti}{0}{3}{3}{0}
   \qcmark{1}{2}
-  \node[cRow,  font=\scriptsize] at (-0.45,-1.5) {$r_{1}$};
-  \node[cDiag, font=\scriptsize] at (1.0,0.34)   {$r_{9}$};
-  \node[cCol,  font=\scriptsize] at (2.5,0.34)   {$r_{6}$};
-  \node[cAnti, font=\scriptsize] at (3.85,0.34)  {$r_{15}$};
+  % labels sit outside the board, each at the outward end of the capsule it names
+  \node[cRow,  font=\scriptsize] at (-0.45,-1.5) {$r_{1}$};   % row 1 runs to y = -1.5
+  \node[cDiag, font=\scriptsize] at (1.5,0.34)   {$r_{9}$};   % diagonal ends at (0,1), x = 1.5
+  \node[cCol,  font=\scriptsize] at (2.5,0.34)   {$r_{6}$};   % column 2, x = 2.5
+  \node[cAnti, font=\scriptsize] at (3.5,0.34)   {$r_{15}$};  % anti-diagonal ends at (0,3), x = 3.5
 \end{qcpic}
 &
 \begin{qcpic}{0.62cm}
@@ -352,8 +353,9 @@ the thresholds are determined by the degrees alone.
   \draw[cAnti,densely dotted,line width=0.9pt] (0.5,-0.5) circle (0.36);
   \node[cRow,  font=\scriptsize] at (-0.45,-0.5) {$r_{0}$};
   \node[cCol,  font=\scriptsize] at (0.5,0.34)   {$r_{4}$};
-  \node[cDiag, font=\scriptsize] at (3.55,-3.86) {$r_{10}$};
-  \node[cAnti, font=\scriptsize] at (1.35,-4.42) {no row};
+  \node[cDiag, font=\scriptsize] at (3.5,-4.45)  {$r_{10}$};
+  % the absent anti-diagonal points up and left off the board, so its label goes there
+  \node[cAnti, font=\scriptsize] at (-0.7,0.5)   {no row};
 \end{qcpic}
 \\[0.5em]
 \qclab{(a) an interior square: $\deg = 4$} & \qclab{(b) a corner: $\deg = 3$}
@@ -383,10 +385,17 @@ One detail of the layout is worth recording, because it is where a transcription
 unnoticed. A diagonal is a set of squares on which $i - j$ is constant and an anti-diagonal one on
 which $i + j$ is constant; but the development indexes squares by natural numbers, on which
 subtraction is truncated, $2 - 5$ being $0$ rather than $-3$. Membership is therefore tested
-additively, the square $(i,j)$ lying on the $e$-th row of the diagonal block when $i + N = e + 2 + j$
-and on the $e$-th of the anti-diagonal block when $i + j + (2N-3) = e + 1$. Both are equivalent to the
-intended condition over $\mathbb{Z}$, and neither ever subtracts. The same hazard appears in the
-checker, where it is discharged by \thmref{thm:spec}.
+additively. The $2(2N-3)$ constraints~\eqref{eq:form-diag} and~\eqref{eq:form-anti} carry a single
+index $e$, the first $2N-3$ values being the diagonals and the remainder the anti-diagonals, and the
+square $(i,j)$ lies on constraint $e$ exactly when
+\begin{equation}\label{eq:onslack}
+  i + N = e + 2 + j \quad\text{if } e < 2N-3, \qquad\qquad
+  i + j + (2N-3) = e + 1 \quad\text{otherwise.}
+\end{equation}
+Both are equivalent to the intended condition over $\mathbb{Z}$, and neither ever subtracts. The
+second reads oddly because $e$ is the index into the whole block rather than into the anti-diagonals
+alone; with a local index it would be $i + j = e + 1$. The same hazard appears in the checker, where
+it is discharged by \thmref{thm:spec}.
 
 \subsection{How this formulation differs from the Sudoku formulation}\label{sec:diff}
 
@@ -506,45 +515,63 @@ mentions no arrays, no defaults and no truncated arithmetic. As an additional ch
 compared against an independently written implementation over the integers, exhaustively on every
 board of size four and of size five.
 
-\subsection{The minimizers are the completions}\label{sec:min}
+\subsection{What the minimizers are}\label{sec:min}
 
-\begin{thm}[the minimizers are the completions]\label{thm:min}
-For the queens instance, a state of the network~\eqref{eq:WT} attains minimum energy if and only if
-the board decoded from it is a completion.
+\begin{thm}[the minimizers]\label{thm:min}
+For the queens instance, the minimum energy is attained if and only if the instance has a completion;
+and every state attaining it decodes to a completion.
 \end{thm}
 
-Combining \thmref{thm:net} with the uniqueness result of \secref{sec:hnbm} gives further that the
-stationary distribution of the Boltzmann machine at temperature $T$ assigns vanishing probability to
-the non-completions as $T \to 0^{+}$. This is a statement about the equilibrium distribution, not
-about any cooling schedule.
+The second half does not reverse, and it is worth saying why. Decoding reads only the square
+variables, not the auxiliary variables of~\eqref{eq:form-diag} and~\eqref{eq:form-anti}, so a state
+whose board decodes to a completion need not be a minimizer. On the empty $4\times4$ board, flipping
+one auxiliary bit of the encoded completion $q = (1,3,0,2)$ leaves the decoded board equal to $q$
+while raising $p$ from $0$ to $1$. What \thmref{thm:iff} and \thmref{thm:min} give is therefore an
+equivalence between the existence of a zero and the existence of a completion, together with
+soundness of each individual minimizer --- which is what a search needs, since a search reports the
+state it stopped at.
+
+Combining \thmref{thm:net} with the uniqueness result of \secref{sec:hnbm} gives further that, for an
+instance that has a completion, the stationary distribution of the Boltzmann machine at temperature
+$T$ assigns vanishing probability to the infeasible states as $T \to 0^{+}$. The hypothesis is not
+decoration: on a blocked instance no state attains $-\tfrac12\lVert\hat b\rVert_2^2$ and there is
+nothing for the mass to concentrate on. The vanishing set is the states with $p > 0$, which by the
+previous paragraph is strictly larger than the set of states whose boards are not completions. This is
+a statement about the equilibrium distribution, not about any cooling schedule.
 
 \subsection{Boards with no completion}\label{sec:blocked}
 
 \begin{figure}[t]
 \centering
-\begin{tabular}{@{}c@{\hspace{1.7em}}c@{\hspace{1.7em}}c@{\hspace{1.0em}}c@{\hspace{1.0em}}c@{}}
-\begin{qcpic}{0.40cm}
+% Two rows: five boards side by side would be about 16cm wide, which no reasonable \textwidth takes.
+\begin{tabular}{@{}c@{\hspace{2.2em}}c@{}}
+\begin{qcpic}{0.46cm}
   \qcboard{8}\qcattack{0}{0}{1}{1}\qcgivens{0/0,1/1}
 \end{qcpic}
 &
-\begin{qcpic}{0.40cm}
+\begin{qcpic}{0.46cm}
   \qcboard{7}\qcgivens{0/0,1/6}
 \end{qcpic}
-&
-\begin{qcpic}{0.40cm}
+\\[0.5em]
+\qclab{(a) \texttt{Attack}} & \qclab{(b) \texttt{Blk7}}
+\end{tabular}
+
+\vspace{1.1em}
+
+\begin{tabular}{@{}c@{\hspace{1.6em}}c@{\hspace{1.6em}}c@{}}
+\begin{qcpic}{0.46cm}
   \qcboard{4}\qcgivens{0/0}
 \end{qcpic}
 &
-\begin{qcpic}{0.40cm}
+\begin{qcpic}{0.46cm}
   \qcboard{4}\qcplace{2,0,3,1}
 \end{qcpic}
 &
-\begin{qcpic}{0.40cm}
+\begin{qcpic}{0.46cm}
   \qcboard{4}\qcplace{1,3,0,2}
 \end{qcpic}
 \\[0.5em]
-\qclab{(a) \texttt{Attack}} & \qclab{(b) \texttt{Blk7}} & \qclab{(c) \texttt{Blk4}}
-& \qclab{(d)} & \qclab{(e)}
+\qclab{(c) \texttt{Blk4}} & \qclab{(d)} & \qclab{(e)}
 \end{tabular}
 \caption{Three blocked instances, and why. Given queens are dark, as in the widget. (a) The two
 givens share a diagonal, shown the way the widget shows it, and no enumeration is needed. (b) The
@@ -578,8 +605,9 @@ than presenting it as carrying the same weight as the other six.
 \subsection{Where the certification stops}\label{sec:stop}
 
 The objective is identified with the energy by \thmref{thm:net}; the integer routine computing the
-net input in the inner loop is proved equal to the network's local field; and the minimizers are
-characterized by \thmref{thm:min}. The \emph{trajectory} is not certified, for the reason given in
+net input in the inner loop is proved equal to twice the network's local field --- net input less
+threshold --- the factor of two being the one that lets $\theta$ be stored as $2\theta$; and the
+minimizers are characterized by \thmref{thm:min}. The \emph{trajectory} is not certified, for the reason given in
 \secref{sec:hnbm}: \eqref{eq:dhnm} and~\eqref{eq:bmm} accumulate, and no configuration of the
 implemented solver is the single-neuron dynamics that~\citeref{hnbm} covers. What a run of
 \secref{sec:exp} establishes when it succeeds is therefore a theorem about the board; what it
@@ -642,27 +670,27 @@ each board row, that is to say the rows $r_0,\dots,r_{N-1}$ of \figref{fig:inc}.
 \begin{table}[t]
 \centering\small
 \setlength{\tabcolsep}{5pt}
-\begin{tabular}{@{}llll@{}}
+\begin{tabular}{@{}l p{0.44\textwidth} l@{}}
 \toprule
-& meaning & value & \\
+& meaning & value\\
 \midrule
-$N$            & population size                            & $20$ & \\
-$M$            & stall limit, in rounds                     & $20$ & \\
-               & round cap                                  & $60$ & \\
-               & inner iterations per equilibration         & $40$ & \\
-$T_0$          & initial temperature                        & $3.0$ & \\
-$\eta$         & cooling rate                               & $0.9$ & \\
-$c_0$          & inertia weight                             & $0.5$ & \\
-$c_1$          & cognitive coefficient                      & $2.0$ & \\
-$c_2$          & social coefficient                         & $0.25$ & decisive; see below\\
-$P_m$          & bit-flip mutation probability              & $0.05$ & \\
+$N$            & population size                                     & $20$\\
+$M$            & stall limit, in rounds                              & $20$\\
+               & round cap                                           & $60$\\
+               & inner iterations per equilibration                  & $40$\\
+$T_0$          & initial temperature                                 & $3.0$\\
+$\eta$         & cooling rate                                        & $0.9$\\
+$c_0$          & inertia weight                                      & $0.5$\\
+$c_1$          & cognitive coefficient                               & $2.0$\\
+$c_2$          & social coefficient                                  & $0.25$\\
+$P_m$          & bit-flip mutation probability                       & $0.05$\\
 $\mathcal{T}$  & diversity threshold, as a fraction of $\delta_{\max} = 1/\sqrt{n}$
-               & $0.4$ (BMm), $0.9$ (DHNm) & scale-free; see below\\
+               & $0.4$ (BMm), $0.9$ (DHNm)\\
 \bottomrule
 \end{tabular}
 \caption{The parameters of \figref{fig:alg}, as used for every row of \tabref{tab:results} and
 \tabref{tab:blocked}. \emph{Not one of these values is stated in~\citeref{liwang2022}}; all were
-recovered experimentally, and the two annotated ones are not merely a matter of
+recovered experimentally, and $c_2$ and $\mathcal{T}$ are not merely a matter of
 tuning.}\label{tab:params}
 \end{table}
 
@@ -707,11 +735,11 @@ converse is not proved, so the baseline's failures are reported as observations.
 
 \begin{table}[t]
 \centering\footnotesize
-\setlength{\tabcolsep}{4.5pt}
+\setlength{\tabcolsep}{3.5pt}
 \begin{tabular}{@{}lrrrr rr rrr r r@{}}
 \toprule
-& & & & & \multicolumn{2}{c}{backtracking}
-& \multicolumn{3}{c}{CNS/BMm, \eqref{eq:bmm}\,+\,Alg.~2} & CNS/DHNm & BMm alone\\
+& & & & & \multicolumn{2}{c}{backtr.}
+& \multicolumn{3}{c}{CNS/BMm} & DHNm & 1 BMm\\
 \cmidrule(lr){6-7}\cmidrule(lr){8-10}\cmidrule(lr){11-11}\cmidrule(lr){12-12}
 board & $N$ & $|G|$ & $n$ & $m$ & ok & \#compl. & hit & rounds & $s/k$ & $s/k$ & $s/20$\\
 \midrule
@@ -730,11 +758,11 @@ board & $N$ & $|G|$ & $n$ & $m$ & ok & \#compl. & hit & rounds & $s/k$ & $s/k$ &
 \bottomrule
 \end{tabular}
 \caption{The eleven completable instances. Columns: board size; number of givens; the variable and
-constraint counts $n$ and $m$ of~\eqref{eq:sizes}; whether the checker accepts the board
-backtracking returned; the total number of completions; whether CNS/BMm reached $p = 0$ at the base
-seed, and in how many rounds; successes over $k$ seeds for CNS/BMm and for CNS/DHNm; and successes
-over $20$ seeds for a single BMm run with no population. Backtracking found a completion on every
-row.}\label{tab:results}
+constraint counts $n$ and $m$ of~\eqref{eq:sizes}; whether the checker accepts the board backtracking
+returned; the total number of completions; whether the collaborative search driving BMm~\eqref{eq:bmm}
+reached $p = 0$ at the base seed, and in how many rounds; its successes over $k$ seeds; the same
+driving DHNm~\eqref{eq:dhnm}; and successes over $20$ seeds for a single BMm run with no population at
+all. Backtracking found a completion on every row.}\label{tab:results}
 \end{table}
 
 \begin{table}[t]
@@ -769,8 +797,9 @@ nothing below should be read as one.
 
 \emph{2) The population is not a refinement.} A single BMm run with no population succeeds on $7$ of
 $20$ seeds at $N = 4$ and $5$ of $20$ at $N = 5$, and on nothing from $N = 6$ upwards or on any
-instance with givens. The collaborative search reaches a completion on ten of the eleven rows. Here
-the collaborative element is the difference between working and not working.
+instance with givens. The collaborative search reaches a completion on ten of the eleven rows under
+BMm and on all eleven under DHNm. Here the collaborative element is not a refinement but the
+difference between working and not working.
 
 \emph{3) The two models separate, and only where there are givens.} On the seven empty boards DHNm
 and BMm are indistinguishable, at $53$ of $60$ seeds each. On the four boards with givens BMm is
@@ -778,7 +807,8 @@ ahead, $32$ of $40$ against $26$. The separation is not uniform --- DHNm is the 
 reach $N = 10$ at all, once in five seeds --- and it is problem-specific: on a graph-colouring corpus
 formulated in the same framework the two are indistinguishable throughout.
 
-\emph{4) The corpus is what bounds the claim.} $N = 10$ is where the swarm stops. A purpose-built
+\emph{4) The corpus is what bounds the claim.} $N = 10$ is the edge: BMm fails on it on every seed
+and DHNm succeeds on one of five, and nothing larger was run. A purpose-built
 Hopfield network for $n$-queens~\citeref{mandziuk1995} reaches $N = 80$, on the plain problem rather
 than on Completion. The completion counts in \tabref{tab:results} are a check on the baseline, which
 returns $1,1,0,0,2,10,4,40,92,352,724$ for $n = 0,\dots,10$ on the empty boards, the classical
@@ -797,25 +827,31 @@ and a standard deviation reports the same thing twice.
 
 \begin{figure}[t]
 \centering
-\begin{tabular}{@{}c@{\hspace{1.2em}}c@{\hspace{2.6em}}c@{\hspace{1.2em}}c@{}}
-\begin{qcpic}{0.40cm}
+% One instance per row, beside its completion; four boards abreast would run to about 16cm.
+\begin{tabular}{@{}c@{\hspace{2.2em}}c@{}}
+\begin{qcpic}{0.46cm}
   \qcboard{6}\qcgivens{0/1}
 \end{qcpic}
 &
-\begin{qcpic}{0.40cm}
+\begin{qcpic}{0.46cm}
   \qcboard{6}\qcplace{1,3,5,0,2,4}\qcgivens{0/1}
-\end{qcpic}
-&
-\begin{qcpic}{0.40cm}
-  \qcboard{8}\qcgivens{0/0,1/4,2/7}
-\end{qcpic}
-&
-\begin{qcpic}{0.40cm}
-  \qcboard{8}\qcplace{0,4,7,5,2,6,1,3}\qcgivens{0/0,1/4,2/7}
 \end{qcpic}
 \\[0.5em]
 \qclab{(a) \texttt{Comp6}} & \qclab{(b) its completion}
-& \qclab{(c) \texttt{Comp8}} & \qclab{(d) its completion}
+\end{tabular}
+
+\vspace{1.1em}
+
+\begin{tabular}{@{}c@{\hspace{2.2em}}c@{}}
+\begin{qcpic}{0.46cm}
+  \qcboard{8}\qcgivens{0/0,1/4,2/7}
+\end{qcpic}
+&
+\begin{qcpic}{0.46cm}
+  \qcboard{8}\qcplace{0,4,7,5,2,6,1,3}\qcgivens{0/0,1/4,2/7}
+\end{qcpic}
+\\[0.5em]
+\qclab{(c) \texttt{Comp8}} & \qclab{(d) its completion}
 \end{tabular}
 \caption{Two completable instances and their completions, in the colours the widget uses: given
 queens dark, queens the solver placed light. Each instance has exactly one completion, so what is
@@ -836,44 +872,50 @@ that runs is the code the theorems are about.
 \section{From the formulation to the development}\label{sec:map}
 
 \begin{table}[t]
-\centering\footnotesize
+\centering\scriptsize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}p{0.39\textwidth}p{0.30\textwidth}l@{}}
+\begin{tabular}{@{}p{0.34\textwidth} p{0.38\textwidth} l@{}}
 \toprule
 statement & Lean identifier & file\\
 \midrule
-\eqref{eq:p}, the canonical form & \lstinline{Problem} & \texttt{QUBO/Problem.lean}\src{HopfieldNet/QUBO/Problem.lean}\\
-$p$ is integer-valued & \lstinline{one_le_penaltyR_of_ne_zero} & \texttt{QUBO/Minimizers.lean}\src{HopfieldNet/QUBO/Minimizers.lean}\\
-\thmref{thm:net}, \eqref{eq:Ep} & \lstinline{zeroOneHamiltonian_eq} & \texttt{QUBO/Net.lean}\src{HopfieldNet/QUBO/Net.lean}\\
-minimizers are the feasible points & \lstinline{energy_eq_min_iff} & \texttt{QUBO/Minimizers.lean}\\
-the gap of $\tfrac12$ & \lstinline{half_le_energy_sub_min} & \texttt{QUBO/Minimizers.lean}\\
-the inner loop is the local field & \lstinline{netVec_eq_localField} & \texttt{QUBO/Refine.lean}\src{HopfieldNet/QUBO/Refine.lean}\\
-low-temperature concentration & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{QUBO/Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
+\eqref{eq:p}, the canonical form & \lstinline{Problem} & \texttt{Problem.lean}\src{HopfieldNet/QUBO/Problem.lean}\\
+$p$ is integer-valued & \lstinline{one_le_penaltyR_of_ne_zero} & \texttt{Minimizers.lean}\src{HopfieldNet/QUBO/Minimizers.lean}\\
+\thmref{thm:net}, \eqref{eq:Ep} & \lstinline{zeroOneHamiltonian_eq} & \texttt{Net.lean}\src{HopfieldNet/QUBO/Net.lean}\\
+minimizers are the feasible points & \lstinline{energy_eq_min_iff} & \texttt{Minimizers.lean}\\
+the gap of $\tfrac12$ & \lstinline{half_le_energy_sub_min} & \texttt{Minimizers.lean}\\
+the inner loop is twice the local field & \lstinline{netVec_eq_localField} & \texttt{Refine.lean}\src{HopfieldNet/QUBO/Refine.lean}\\
+low-temperature concentration, given a completion & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
+Algorithm~2 & \lstinline{search} & \texttt{Search.lean}\src{HopfieldNet/QUBO/Search.lean}\\
+\eqref{eq:dhnm}, \eqref{eq:bmm} & \lstinline{dhnmStep}, \lstinline{bmmStep} & \texttt{Dynamics.lean}\src{HopfieldNet/QUBO/Dynamics.lean}\\
 \midrule
-\eqref{eq:form} is well formed & \lstinline{problem_wf}, \lstinline{problem_refines} & \texttt{Queens/Basic.lean}\src{HopfieldNet/QUBO/Instances/Queens/Basic.lean}\\
-\figref{fig:inc}, the row layout & \lstinline{rowRow}, \lstinline{colRow}, \lstinline{diagRow}, \lstinline{antiRow} & \texttt{Queens/Basic.lean}\\
-additive diagonal membership & \lstinline{onSlack} & \texttt{Queens/Basic.lean}\\
-\figref{fig:inc}, the degrees $4$, $3$, $1$ & \lstinline{rowsOf}, and the \lstinline{#guard}s pinning its size & \texttt{Queens/Basic.lean}, \texttt{Spec.lean}\src{HopfieldNet/QUBO/Instances/Queens/Spec.lean}\\
-\thmref{thm:iff}, soundness & \lstinline{decode_isQueens} & \texttt{Queens/Basic.lean}\\
-\thmref{thm:iff}, completeness & \lstinline{encode_penalty_zero} & \texttt{Queens/Basic.lean}\\
-\thmref{thm:iff}, the equivalence & \lstinline{exists_zero_iff_queens} & \texttt{Queens/Basic.lean}\\
-\thmref{thm:spec} & \lstinline{isQueens_iff}, \lstinline{exists_zero_iff_completion} & \texttt{Queens/Spec.lean}\\
-agreement with an independent checker & \lstinline{isQueens_eq_naive_four/_five} & \texttt{Queens/Spec.lean}\\
-\thmref{thm:min} & \lstinline{exists_minEnergy_iff} & \texttt{Queens/Converge.lean}\src{HopfieldNet/QUBO/Instances/Queens/Converge.lean}\\
-\figref{fig:blocked}(a), (c) & \lstinline{attacking_no_queens}, \lstinline{blocked4_no_queens} & \texttt{Queens/Examples.lean}\src{HopfieldNet/QUBO/Instances/Queens/Examples.lean}\\
-\figref{fig:blocked}(b) & \lstinline{blk7_no_queens}, \lstinline{blk7_no_zero} & \texttt{Queens/Bench.lean}\src{HopfieldNet/QUBO/Instances/Queens/Bench.lean}\\
+\eqref{eq:form} is well formed & \lstinline{problem_wf}, \lstinline{problem_refines} & \texttt{Basic.lean}\src{HopfieldNet/QUBO/Instances/Queens/Basic.lean}\\
+\figref{fig:inc}, the row layout & \lstinline{rowRow}, \lstinline{colRow}, \lstinline{diagRow}, \lstinline{antiRow} & \texttt{Basic.lean}\\
+\figref{fig:inc}, the degrees $4$, $3$, $1$ & \lstinline{rowsOf} & \texttt{Basic.lean}\\
+additive diagonal membership & \lstinline{onSlack} & \texttt{Basic.lean}\\
+\thmref{thm:iff}, soundness & \lstinline{decode_isQueens} & \texttt{Basic.lean}\\
+\thmref{thm:iff}, completeness & \lstinline{encode_penalty_zero} & \texttt{Basic.lean}\\
+\thmref{thm:iff}, the equivalence & \lstinline{exists_zero_iff_queens} & \texttt{Basic.lean}\\
+\thmref{thm:spec} & \lstinline{isQueens_iff}, \lstinline{exists_zero_iff_completion} & \texttt{Spec.lean}\src{HopfieldNet/QUBO/Instances/Queens/Spec.lean}\\
+agreement with an independent checker & \lstinline{isQueens_eq_naive_four/_five} & \texttt{Spec.lean}\\
+\thmref{thm:min}, the equivalence & \lstinline{exists_minEnergy_iff} & \texttt{Converge.lean}\src{HopfieldNet/QUBO/Instances/Queens/Converge.lean}\\
+\thmref{thm:min}, every minimizer & \lstinline{isQueens_decode_of_minEnergy} & \texttt{Converge.lean}\\
+\figref{fig:blocked}(a), (c) & \lstinline{attacking_no_queens}, \lstinline{blocked4_no_queens} & \texttt{Examples.lean}\src{HopfieldNet/QUBO/Instances/Queens/Examples.lean}\\
+\figref{fig:blocked}(b) & \lstinline{blk7_no_queens}, \lstinline{blk7_no_zero} & \texttt{Bench.lean}\src{HopfieldNet/QUBO/Instances/Queens/Bench.lean}\\
+\figref{fig:comp}, the two instances & \lstinline{small6}, \lstinline{completion8} & \texttt{Examples.lean}\\
 \midrule
-the baseline returns only completions & \lstinline{solve_isQueens} & \texttt{Queens/Baseline.lean}\src{HopfieldNet/QUBO/Instances/Queens/Baseline.lean}\\
-\figref{fig:blocked}(d), (e), and the counts & \lstinline{count} & \texttt{Queens/Baseline.lean}\\
-Algorithm~2 & \lstinline{search} & \texttt{QUBO/Search.lean}\src{HopfieldNet/QUBO/Search.lean}\\
-\eqref{eq:dhnm}, \eqref{eq:bmm} & \lstinline{dhnmStep}, \lstinline{bmmStep} & \texttt{QUBO/Dynamics.lean}\src{HopfieldNet/QUBO/Dynamics.lean}\\
-\tabref{tab:results}, \tabref{tab:blocked} & \lstinline{table}, \lstinline{tableBlocked} & \texttt{Queens/Bench.lean}\\
-\figref{fig:comp}, the two instances & \lstinline{small6}, \lstinline{completion8} & \texttt{Queens/Examples.lean}\\
-every board drawn in this article & the \lstinline{#guard}s of \secref{sec:map} & \texttt{Queens/Figures.lean}\src{HopfieldNet/QUBO/Instances/Queens/Figures.lean}\\
-the widgets & \lstinline{animate}, \lstinline{board} & \texttt{Queens/Widget.lean}, \texttt{Interactive.lean}\src{HopfieldNet/QUBO/Instances/Queens/Interactive.lean}\\
+the baseline returns only completions & \lstinline{solve_isQueens} & \texttt{Baseline.lean}\src{HopfieldNet/QUBO/Instances/Queens/Baseline.lean}\\
+\figref{fig:blocked}(d), (e), and the counts & \lstinline{count} & \texttt{Baseline.lean}\\
+\tabref{tab:results}, \tabref{tab:blocked} & \lstinline{table}, \lstinline{tableBlocked} & \texttt{Bench.lean}\\
+\tabref{tab:params} & \lstinline{SearchConfig}, \lstinline{benchModel} & \texttt{Search.lean}, \texttt{Bench.lean}\\
+every board drawn above & the \lstinline{#guard}s of \texttt{Figures.lean} & \texttt{Figures.lean}\src{HopfieldNet/QUBO/Instances/Queens/Figures.lean}\\
+the animated widget & \lstinline{animate} & \texttt{Widget.lean}\src{HopfieldNet/QUBO/Instances/Queens/Widget.lean}\\
+the interactive widget & \lstinline{board}, \lstinline{queensSolve} & \texttt{Interactive.lean}\src{HopfieldNet/QUBO/Instances/Queens/Interactive.lean}\\
 \bottomrule
 \end{tabular}
-\caption{Each statement of this article, its Lean identifier, and its file.}\label{tab:map}
+\caption{Each statement of this article, its Lean identifier, and its file. Files in the first block
+are under \texttt{HopfieldNet/QUBO/}, those in the second and third under
+\texttt{HopfieldNet/QUBO/Instances/Queens/}; each link resolves to the file
+itself.}\label{tab:map}
 \end{table}
 
 \tabref{tab:map} lists every statement made above against the identifier that discharges it.

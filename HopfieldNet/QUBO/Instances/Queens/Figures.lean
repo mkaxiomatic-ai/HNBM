@@ -101,6 +101,35 @@ that exists and a row that does not: no row of `Â` contains `(0,0)` and nothing
     ((List.range 4).flatMap fun a => (List.range 4).filterMap fun b =>
       if (I.rowsOf (I.cellVar a b)).contains r then some (a, b) else none).length > 1
 
+/-! ## The additive index formulas of §3.3
+
+The paper displays the membership test as an equation, with `e` running over the whole block of
+`2(2N-3)` diagonal constraints. Checked here exactly as printed, at `N = 8`, together with the two
+facts that make the two families the families they are named after: constant `i - j` on the first
+`2N-3`, constant `i + j` on the rest, each with at least two squares. -/
+
+#guard
+  let N := 8
+  let I : Instance := ⟨N, #[]⟩
+  let D := I.ndiags
+  (List.range N).all fun i => (List.range N).all fun j =>
+    (List.range (2 * D)).all fun e =>
+      I.onSlack i j e == (if e < D then i + N == e + 2 + j else i + j + D == e + 1)
+
+#guard
+  let N := 8
+  let I : Instance := ⟨N, #[]⟩
+  let D := I.ndiags
+  let cellsOn (e : Nat) : List (Int × Nat) :=
+    (List.range N).flatMap fun i => (List.range N).filterMap fun j =>
+      if I.onSlack i j e then some ((i : Int) - j, i + j) else none
+  ((List.range D).all fun e =>
+      let cs := cellsOn e
+      cs.length ≥ 2 && cs.all fun c => c.1 == (cs.getD 0 (0, 0)).1)      -- `i - j` constant
+    && ((List.range D).all fun d =>
+      let cs := cellsOn (D + d)
+      cs.length ≥ 2 && cs.all fun c => c.2 == (cs.getD 0 (0, 0)).2)     -- `i + j` constant
+
 /-! ## Figure 2 --- three blocked instances, and the two boards that refute one of them
 
 **(a) `Attack`.** An `8 × 8` board with the two givens drawn, and the caption's reason: they share a
@@ -203,6 +232,25 @@ really not. This is the property that makes the two tables two tables. -/
 #guard
   corpus.all (fun r => Baseline.count r.I > 0)
     && blockedCorpus.all (fun r => Baseline.count r.I == 0)
+
+/-! ## The counterexample of §4.4
+
+The paper states that the second half of its minimizer theorem does not reverse: a state whose board
+decodes to a completion need not attain the minimum, because `decode` reads only the square variables
+and not the slacks. The witness it gives is the encoded completion `(1,3,0,2)` of the empty `4 × 4`
+board with one slack bit flipped. Pinned here, because a false claim in that sentence would make the
+paper assert a theorem the development does not have --- and, as the flip shows, one that is false. -/
+
+#guard
+  let I : Instance := ⟨4, #[]⟩
+  let q : Array Nat := #[1, 3, 0, 2]
+  let x := I.encode q
+  let x' := x.set! (I.slackVar 0) (!x.getD (I.slackVar 0) false)
+  I.isQueens q                                   -- `q` is a completion
+    && (problem I).penaltyDoubled x == 0         -- so its encoding is a minimizer
+    && I.decode x' == q                          -- the flipped state decodes to the same board
+    && I.isQueens (I.decode x')                  -- which is still a completion
+    && (problem I).penaltyDoubled x' != 0        -- yet the flipped state is not a minimizer
 
 /-! ## The parameter table of §5.2
 

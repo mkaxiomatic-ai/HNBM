@@ -64,25 +64,32 @@ Freek Wiedijk\inst{2}
 \maketitle
 
 \begin{abstract}
-Hopfield networks and Boltzmann machines settle into states of low energy, and minimizing such an
-energy is, after an affine change of variables, quadratic unconstrained binary optimization --- the
-form in which combinatorial problems are handed to annealing hardware. What an answer from such a
-solver means depends on the translation that produced its input, and that translation is usually
-justified by testing rather than by proof. We formalize in Lean~4 a class of constraint problems of
-the form $\lVert Ax-b\rVert^2$, prove that each is a Boltzmann network whose lowest-energy states are
-exactly its solutions, and encode $n$-Queens Completion: given a chessboard with some queens already
-placed, can the placement be extended so that no two queens attack each other? The networks are those
-of our LPAR-26 paper, used unchanged. We prove the encoding correct in both directions, and prove
-separately that the checker it is correct against really is the chess condition. The second direction
-is the useful one: when the solver reports that no solution exists, that report becomes a theorem
-about the chessboard rather than a failure of the search. We exhibit a $7\times7$ board whose two
-given queens do not attack each other and which admits no completion, and prove that it admits none.
+Constraint problems are increasingly handed to machines that minimize an energy: quantum annealers
+and Ising machines take a quadratic function of binary variables and settle into a state where it is
+small. The same idea underlies Hopfield networks --- recurrent networks that store patterns as stable
+states --- and Boltzmann machines, their stochastic generalization. In each case the answer is only as
+trustworthy as the translation that turned the problem into an energy, and that translation is
+normally justified by testing rather than by proof. We give one and prove it correct in Lean~4. We
+formalize a class of constraint problems of the form $\lVert Ax-b\rVert^2$, prove that each is a
+Boltzmann network whose lowest-energy states are exactly its solutions, and encode $n$-Queens
+Completion: given a chessboard with some queens already placed, can the placement be extended so that
+no two queens attack each other? The networks are those of our LPAR-26 paper, used unchanged. We prove
+the encoding correct in both directions, and prove separately that the checker it is correct against
+really is the chess condition. The second direction is the useful one: when the solver reports that no
+solution exists, that report becomes a theorem about the chessboard rather than a failure of the
+search. We exhibit a $7\times7$ board whose two given queens do not attack each other and which admits
+no completion, and prove that it admits none.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
 
-Our LPAR-26 paper~\citeref{hnbm} formalizes Hopfield networks and Boltzmann machines in Lean~4. Its
-introduction notes that minimizing the energy of a Hopfield network is, after an affine change of
+Hopfield networks and Boltzmann machines come from statistical mechanics: a collection of binary
+units with symmetric couplings has an energy, the network's own updates drive that energy down, and
+the states of least energy are what the network computes. Choosing the couplings so that those states
+are the solutions of a combinatorial problem turns the network into a solver, which is the same
+reading that underlies annealing hardware. \secref{sec:hnbm} gives the definitions.
+
+Our LPAR-26 paper~\citeref{hnbm} formalizes both in Lean~4. Its introduction notes that minimizing the energy of a Hopfield network is, after an affine change of
 variables, quadratic unconstrained binary optimization (QUBO)~\citeref{lucas2014ising}, and that a
 machine-checked account of the dynamics would give a specification against which algorithms running
 on annealing hardware could be verified. We did not carry that out. This paper carries it out for one

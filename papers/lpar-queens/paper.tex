@@ -64,39 +64,37 @@ Freek Wiedijk\inst{2}
 \maketitle
 
 \begin{abstract}
-Some machines compute by settling rather than by evaluating: they are given a quadratic function of
-binary variables and come to rest where it is small. Quantum annealers and Ising machines work this
-way, and so do Hopfield networks --- recurrent networks that store patterns as stable states --- and
-Boltzmann machines, their stochastic generalization. What an answer from such a machine means depends
-entirely on the translation that turned the problem into a function to be minimized, and that
-translation is normally justified by testing rather than by proof. We prove one correct. We formalize
-in Lean~4 a class of constraint problems of the form $\lVert Ax-b\rVert^2$, show that each is a
-Boltzmann network whose lowest-energy states are exactly its solutions, and encode $n$-Queens
-Completion: given a chessboard with some queens already placed, can the placement be extended so that
-no two queens attack each other? We prove the encoding correct in both directions, and prove
-separately that the checker it is correct against really is the chess condition. The second direction
-is the one that pays: when the solver reports that no solution exists, that report becomes a theorem
-about the chessboard rather than a failure of the search. We exhibit a $7\times7$ board whose two
-given queens do not attack each other and which admits no completion, and prove that it admits none.
+Combinatorial problems are increasingly solved by energy minimization, yet the encodings that make
+this possible are rarely verified. We present a Lean~4 formalization of one such encoding, proved
+correct in both directions. We first formalize a class of constraint problems as a sum of squares
+$\lVert Ax-b\rVert^2$ --- an objective vanishing exactly on the solutions --- and prove that each is
+the energy of a $\{0,1\}$ Boltzmann machine whose minimizers are precisely those solutions, with an
+energy gap of at least $\tfrac12$. We then encode $n$-Queens Completion, the question whether a
+partial placement of queens on a chessboard extends to a full one, and prove the encoding sound and
+complete, together with the agreement of its Boolean checker with the chess condition stated
+over~$\mathbb{Z}$. Completeness is what makes a negative answer meaningful: we exhibit a $7\times7$
+partial placement whose two queens do not attack each other, and prove that it admits no completion.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
 
-Networks that compute by coming to rest go back to Hopfield's 1982 model of associative
-memory~\citeref{hopfield1982}, which stores patterns as the stable states of a collection of binary
-units with symmetric couplings, was inspired by the Ising model of magnetism, and has the property
-that its dynamics always settles. Ackley, Hinton and Sejnowski gave a stochastic generalization in
-1985~\citeref{ackley1985}: updates become probabilistic, and the network samples from a distribution
-over states instead of halting at one. Both models have a computational reading as well as a physical
-one. Minimizing a Hopfield energy is, up to an affine change of variables, quadratic unconstrained
-binary optimization (QUBO)~\citeref{lucas2014ising,glover2019}, the native input format of quantum
-annealers, and the same descent is carried out directly by analog and stochastic Ising hardware ---
-the search happening in the device rather than in a program.
+Hopfield networks~\citeref{hopfield1982}, introduced in 1982, model associative memory: a network of
+neurons with symmetric weights has an energy, asynchronous updates never increase it, and the network
+therefore reaches a stable state. Boltzmann machines were introduced by Ackley, Hinton and
+Sejnowski~\citeref{ackley1985} in 1985 as a stochastic generalization, in which neuron updates are
+probabilistic and the network samples from a distribution over states instead of converging to a
+single stable state. In our LPAR-26 paper~\citeref{hnbm} we formalized both in Lean~4, together with
+their convergence and ergodicity.
 
-Our LPAR-26 paper~\citeref{hnbm} formalizes both models in Lean~4, and observes that a machine-checked
-account of these dynamics would give a specification against which such hardware, and the algorithms
-running on it, could be verified. We did not carry that out. This paper carries it out for one
-problem. \secref{sec:hnbm} recalls the definitions we need.
+That paper also records a concrete computational role for these models: minimizing a Hopfield energy
+is, up to an affine change of variables, quadratic unconstrained binary optimization
+(QUBO)~\citeref{lucas2014ising, glover2019}, the native input format of quantum annealers, so a
+machine-checked account of the dynamics gives a specification against which the algorithms running on
+such hardware could be verified. It verifies no such algorithm, however, because it verifies no
+encoding. A problem must first be translated into an energy, and it is the translation that decides
+whether an answer means anything: a correct solver given an unfaithful encoding returns a wrong
+answer, and its failures say nothing at all. This paper supplies one translation and proves it
+correct.
 
 We fix a class of constraint problems with a numerical objective that vanishes exactly on the
 solutions (\secref{sec:qubo}), recall the networks of~\citeref{hnbm} (\secref{sec:hnbm}), and show
@@ -153,17 +151,17 @@ exact cover, Sudoku and queens are all values of it.
 
 Since the point is to put a problem \emph{onto} such a network, we recall briefly what they are.
 
-A \emph{Hopfield network} has $n$ units, each holding $0$ or $1$, a symmetric weight matrix $W$ with
-zero diagonal, and one threshold $\theta_u$ per unit. A state $x$ has energy
+A \emph{Hopfield network} has $n$ neurons, each holding $0$ or $1$, a symmetric weight matrix $W$ with
+zero diagonal, and one threshold $\theta_u$ per neuron. A state $x$ has energy
 \begin{equation}\label{eq:E}
   E(x) \;=\; -\tfrac12\sum_{u \neq v} W_{uv}\,x_u x_v \;+\; \sum_u \theta_u x_u ,
 \end{equation}
 and the \emph{local field} at $u$ is $\sum_{v}W_{uv}x_v - \theta_u$. The network runs by repeatedly
-picking a unit and setting it to $1$ if its local field is positive and to $0$ otherwise. Such an
+picking a neuron and setting it to $1$ if its local field is positive and to $0$ otherwise. Such an
 update can never increase $E$, and as there are finitely many states the process must reach one that
 no single update changes. That is Hopfield's convergence theorem, Theorem~8.1 of~\citeref{hnbm}.
 
-A \emph{Boltzmann machine} keeps~\eqref{eq:E} but makes the update stochastic: unit $u$ becomes $1$
+A \emph{Boltzmann machine} keeps~\eqref{eq:E} but makes the update stochastic: neuron $u$ becomes $1$
 with probability $\sigma(\text{field}/T)$, for the logistic function $\sigma$ and a temperature
 $T > 0$. It no longer halts but wanders, and at fixed $T$ the resulting Markov chain has a unique
 stationary distribution, the Boltzmann law $\propto e^{-E(x)/T}$, which concentrates on low-energy
@@ -196,7 +194,7 @@ concentrates on the solutions as $T \to 0^{+}$.
 \medskip\noindent\textbf{Where the certification stops.} We identify the \emph{objective} with the
 energy, and prove the \emph{integer routine} in the solver's inner loop equal to the local field. We
 do \emph{not} certify the \emph{trajectory}: equations~(3) and~(6) of~\citeref{liwang2022} accumulate
-their input, $u \leftarrow u + (Wx-\theta)$, which is not the single-unit update of
+their input, $u \leftarrow u + (Wx-\theta)$, which is not the single-neuron update of
 \secref{sec:hnbm}, and the two agree only on the first inner iteration, when $u$ is still zero. So the
 objective, the field and the minimizers are certified; the path through the state space is not.
 
@@ -434,13 +432,13 @@ encoding has previously been proved correct in a proof assistant.
 \begin{itemize}\itemsep2pt
 \item No claim of speed; see \secref{sec:meas}.
 \item No new algorithm, and no improvement on the neural-network literature. Ma\'{n}dziuk's
-network~\citeref{mandziuk1995} uses $N^2$ units and no auxiliary variables, and reports convergence of
+network~\citeref{mandziuk1995} uses $N^2$ neurons and no auxiliary variables, and reports convergence of
 $100\%$ (once $99\%$) for $n = 4,8,16,32,48,64,80$, with the average number of rounds fitted by
 $2.82\,n^{0.67}$. On the boards where comparison is meaningful --- the empty ones --- our population
 search matches that up to $N = 8$ and then falls away: we fail at $N = 10$ where he succeeds at
 $N = 80$. Three reasons, none in our favour. His update descends the energy at every step and so
 converges, whereas the recurrences we inherit accumulate and do not (\secref{sec:net}). His encoding
-is built for the problem and needs $N^2$ units, where a generic reduction costs us $N^2+4N-6$, the
+is built for the problem and needs $N^2$ neurons, where a generic reduction costs us $N^2+4N-6$, the
 excess being slacks that carry no information but must still be got right. And our constants were
 recovered on Sudoku, whose pipeline has a presolve stage that queens lacks. A reader wanting an
 effective neurodynamic $n$-queens solver should use his.

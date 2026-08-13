@@ -96,19 +96,44 @@ whether an answer means anything: a correct solver given an unfaithful encoding 
 answer, and its failures say nothing at all. This paper supplies one translation and proves it
 correct.
 
-We fix a class of constraint problems with a numerical objective that vanishes exactly on the
-solutions (\secref{sec:qubo}), recall the networks of~\citeref{hnbm} (\secref{sec:hnbm}), and show
-that the objective is one of their energies, so solving the constraints and minimizing the energy are
-the same task (\secref{sec:net}). We then encode an \textsf{NP}-complete problem this way and prove
-the encoding faithful (\secref{sec:queens}--\secref{sec:correct}), and run Li and Wang's neurodynamic
-solver~\citeref{liwang2022} on it (\secref{sec:solver}--\secref{sec:meas}).
+\secref{sec:prelim} recalls the two models, fixes a class of constraint problems whose objective
+vanishes exactly on the solutions, and shows that the objective is one of their energies, so that
+solving the constraints and minimizing the energy are the same task. \secref{sec:queens} formulates
+an \textsf{NP}-complete problem this way, \secref{sec:correct} proves the formulation faithful, and
+\secref{sec:solver}--\secref{sec:meas} run the algorithms of~\citeref{liwang2022} on it unchanged.
 
 What is \emph{not} claimed: that the solver is fast --- a short backtracking program beats it on every
 instance, and we give the numbers --- or that any algorithm here is new. What is new is that the
 translation from chessboard to network is proved correct in both directions, so the solver's negative
 answers mean something.
 
-\section{Constraint problems as sums of squares}\label{sec:qubo}
+\section{Preliminaries}\label{sec:prelim}
+
+\subsection{Hopfield networks and Boltzmann machines}\label{sec:hnbm}
+
+We recall the two models, and what is proved about them in~\citeref{hnbm}.
+
+A \emph{Hopfield network} has $n$ neurons, each holding $0$ or $1$, a symmetric weight matrix $W$ with
+zero diagonal, and one threshold $\theta_u$ per neuron. A state $x$ has energy
+\begin{equation}\label{eq:E}
+  E(x) \;=\; -\tfrac12\sum_{u \neq v} W_{uv}\,x_u x_v \;+\; \sum_u \theta_u x_u ,
+\end{equation}
+and the \emph{local field} at $u$ is $\sum_{v}W_{uv}x_v - \theta_u$. The network runs by repeatedly
+picking a neuron and setting it to $1$ if its local field is positive and to $0$ otherwise. Such an
+update can never increase $E$, and as there are finitely many states the process must reach one that
+no single update changes. That is Hopfield's convergence theorem, Theorem~8.1 of~\citeref{hnbm}.
+
+A \emph{Boltzmann machine} keeps~\eqref{eq:E} but makes the update stochastic: neuron $u$ becomes $1$
+with probability $\sigma(\text{field}/T)$, for the logistic function $\sigma$ and a temperature
+$T > 0$. It no longer halts but wanders, and at fixed $T$ the resulting Markov chain has a unique
+stationary distribution, the Boltzmann law $\propto e^{-E(x)/T}$, which concentrates on low-energy
+states as $T$ falls. Establishing that uniqueness required formalizing the Perron--Frobenius theorem,
+which is \S4 of~\citeref{hnbm}.
+
+Both are formalized there over an abstract network structure, and we use that development unchanged.
+What follows adds an instance, not a theory.
+
+\subsection{Constraint problems in canonical form}\label{sec:qubo}
 
 Take $n$ Boolean unknowns $x_1,\dots,x_n$ and $m$ constraints, each saying that some subset of the
 unknowns contains exactly one $1$. Let $A$ be the $m\times n$ matrix with $A_{r,u} = 1$ when unknown
@@ -147,31 +172,7 @@ formulation, so the encoding below is ours rather than a transcription. In Lean 
 of~\eqref{eq:p} is a structure \lstinline{Problem} that mentions no application; graph colouring,
 exact cover, Sudoku and queens are all values of it.
 
-\section{Hopfield networks and Boltzmann machines}\label{sec:hnbm}
-
-Since the point is to put a problem \emph{onto} such a network, we recall briefly what they are.
-
-A \emph{Hopfield network} has $n$ neurons, each holding $0$ or $1$, a symmetric weight matrix $W$ with
-zero diagonal, and one threshold $\theta_u$ per neuron. A state $x$ has energy
-\begin{equation}\label{eq:E}
-  E(x) \;=\; -\tfrac12\sum_{u \neq v} W_{uv}\,x_u x_v \;+\; \sum_u \theta_u x_u ,
-\end{equation}
-and the \emph{local field} at $u$ is $\sum_{v}W_{uv}x_v - \theta_u$. The network runs by repeatedly
-picking a neuron and setting it to $1$ if its local field is positive and to $0$ otherwise. Such an
-update can never increase $E$, and as there are finitely many states the process must reach one that
-no single update changes. That is Hopfield's convergence theorem, Theorem~8.1 of~\citeref{hnbm}.
-
-A \emph{Boltzmann machine} keeps~\eqref{eq:E} but makes the update stochastic: neuron $u$ becomes $1$
-with probability $\sigma(\text{field}/T)$, for the logistic function $\sigma$ and a temperature
-$T > 0$. It no longer halts but wanders, and at fixed $T$ the resulting Markov chain has a unique
-stationary distribution, the Boltzmann law $\propto e^{-E(x)/T}$, which concentrates on low-energy
-states as $T$ falls. Establishing that uniqueness required formalizing the Perron--Frobenius theorem,
-which is \S4 of~\citeref{hnbm}.
-
-Both are formalized there over an abstract network structure, and we use that development unchanged.
-What follows adds an instance, not a theory.
-
-\section{The objective is an energy}\label{sec:net}
+\subsection{The objective is an energy}\label{sec:net}
 
 Expanding~\eqref{eq:p} gives $p(x) = x^{\top}\!A^{\top}\!Ax - 2b^{\top}\!Ax + \lVert b\rVert^2$, which
 is quadratic but carries a diagonal term $(A^{\top}\!A)_{uu}x_u^2$ that~\eqref{eq:E} has no room for.
@@ -198,7 +199,7 @@ their input, $u \leftarrow u + (Wx-\theta)$, which is not the single-neuron upda
 \secref{sec:hnbm}, and the two agree only on the first inner iteration, when $u$ is still zero. So the
 objective, the field and the minimizers are certified; the path through the state space is not.
 
-\section{The problem, and the encoding}\label{sec:queens}
+\section{Problem formulation}\label{sec:queens}
 
 A queen attacks along its row, its column and both diagonals. The classical $n$-queens problem asks
 for $N$ mutually non-attacking queens on an $N\times N$ board, and has a closed-form solution for
@@ -246,7 +247,9 @@ degree four, would never have prompted it. And two queens share a diagonal when 
 subtraction on $\mathbb{N}$ is truncated, so the test is $i + b = k + a$ instead;
 \secref{sec:correct} proves the two agree.
 
-\section{The encoding is faithful, and so is the checker}\label{sec:correct}
+\section{Correctness of the encoding}\label{sec:correct}
+
+\subsection{Soundness, completeness, and the decision equivalence}
 
 A board is an array of $N$ column indices, $q_i$ being the column of the queen in row $i$, so one
 queen per row is built into the representation. \lstinline{isQueens} is the executable checker: right
@@ -263,6 +266,8 @@ boards are discharged rather than excluded, since at $N = 0$ there are no unknow
 is an empty sum, and the empty board is vacuously a completion. What must be excluded is a given lying
 off the board, whose row would contain no unknown and could never be satisfied.
 
+\subsection{The checker is the chess condition}
+
 \thmref{thm:iff} is stated against \lstinline{isQueens}, a \lstinline{Bool} function we wrote, so by
 itself it leaves the specification untested --- and \secref{sec:queens} has just admitted that the
 diagonals are tested in rearranged form. We therefore also state the condition as a textbook would,
@@ -274,6 +279,8 @@ $(\exists x.\,p(x)=0) \iff (\exists q.\,\texttt{IsCompletion }q)$ --- whose righ
 no matrix, no array and no truncated arithmetic. As a further check, \lstinline{isQueens} is compared
 against an independent list-based implementation over $\mathbb{Z}$ on every board of size four and of
 size five, by kernel reduction.
+
+\subsection{Boards with no completion}
 
 The second direction of \thmref{thm:iff} is the one worth having. Soundness could be had by checking
 the answer afterwards, which is cheap; completeness cannot, since it says that had a solution existed
@@ -300,7 +307,7 @@ tuples and the givens pin some coordinates. The enumeration is ordinary kernel r
 each result upgrades to a claim about every bit vector --- for \texttt{blocked7}, about $2^{71}$
 assignments, obtained from a check over $16807$ tuples.
 
-\section{The solver}\label{sec:solver}
+\section{Neurodynamic algorithms}\label{sec:solver}
 
 The search is Algorithm~2 of~\citeref{liwang2022}, used unchanged, and nothing in it is
 queens-specific. It keeps a population of $N$ copies of a neurodynamic model, runs each until it
@@ -324,7 +331,7 @@ recovered value is model-specific, $0.9$ for DHNm against $0.4$ for BMm, and hav
 Sudoku it \emph{transfers}: on the empty $8\times8$ board DHNm fails at BMm's $0.4$ and succeeds on
 $9$ of $10$ seeds at $0.9$.
 
-\section{Measurements}\label{sec:meas}
+\section{Experimental results}\label{sec:meas}
 
 Population and stall limit $20$, at most $60$ rounds, $40$ inner iterations, $T_0 = 3.0$,
 $\eta = 0.9$, one-hot initialization, fixed base seed; the generator is a \texttt{splitmix64} and
@@ -427,7 +434,7 @@ Sudoku solver~\citeref{weber2006}: a puzzle encoded into a solver formalism and 
 empirically, with no proof that the encoding is right. To the best of our knowledge, no QUBO or Ising
 encoding has previously been proved correct in a proof assistant.
 
-\section{What we do not claim}\label{sec:notclaim}
+\section{Concluding remarks}\label{sec:notclaim}
 
 \begin{itemize}\itemsep2pt
 \item No claim of speed; see \secref{sec:meas}.
@@ -451,6 +458,18 @@ cool to stay near equilibrium. This matters because our single-machine results a
 says the difficulty lies in the schedule rather than in the encoding, and it is not a remedy.
 \item Nothing about the accumulating recurrences of eqs.~(3) and~(6).
 \end{itemize}
+
+In summary, $n$-Queens Completion is formulated here as a quadratic unconstrained binary optimization
+problem; that formulation is proved faithful in both directions, and against a specification of the
+chess condition rather than against a checker we wrote; and the objective it defines is proved to be
+the energy of a $\{0,1\}$ Boltzmann machine of~\citeref{hnbm} whose minimizers are exactly the
+completions. The algorithms of~\citeref{liwang2022} then run on it unchanged. What the proofs buy is
+not speed but meaning: a run that ends without a zero has established something about the chessboard.
+
+The natural next step is to certify the trajectory and not only the objective. Nothing is known to us
+about the accumulating recurrences of eqs.~(3) and~(6), whereas the memoryless single-neuron chain is
+already covered by~\citeref{hnbm}; a solver restricted to that chain would therefore be certified from
+the chessboard to the last update, which neither this paper nor its predecessor yet achieves.
 
 \section*{Acknowledgements}
 % TODO: acknowledgements

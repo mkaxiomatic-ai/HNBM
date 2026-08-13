@@ -64,17 +64,19 @@ Freek Wiedijk\inst{2}
 \maketitle
 
 \begin{abstract}
-In our LPAR-26 paper we formalized Hopfield networks and Boltzmann machines in Lean~4, and remarked
-in passing that minimizing a Hopfield energy is the same thing as quadratic unconstrained binary
-optimization. This paper works out that remark. We formalize a class of constraint problems in the
-form $\lVert Ax-b\rVert^2$, prove that each is a Boltzmann network whose lowest-energy states are
+Hopfield networks and Boltzmann machines settle into states of low energy, and minimizing such an
+energy is, after an affine change of variables, quadratic unconstrained binary optimization --- the
+form in which combinatorial problems are handed to annealing hardware. What an answer from such a
+solver means depends on the translation that produced its input, and that translation is usually
+justified by testing rather than by proof. We formalize in Lean~4 a class of constraint problems of
+the form $\lVert Ax-b\rVert^2$, prove that each is a Boltzmann network whose lowest-energy states are
 exactly its solutions, and encode $n$-Queens Completion: given a chessboard with some queens already
-placed, can the placement be extended so that no two queens attack each other? We prove the encoding
-correct in both directions, and prove separately that the checker it is correct against really is the
-chess condition. The second direction is the useful one: when the solver reports that no solution
-exists, that report becomes a theorem about the chessboard rather than a failure of the search. We
-exhibit a $7\times7$ board whose two given queens do not attack each other and which admits no
-completion, and prove that it admits none.
+placed, can the placement be extended so that no two queens attack each other? The networks are those
+of our LPAR-26 paper, used unchanged. We prove the encoding correct in both directions, and prove
+separately that the checker it is correct against really is the chess condition. The second direction
+is the useful one: when the solver reports that no solution exists, that report becomes a theorem
+about the chessboard rather than a failure of the search. We exhibit a $7\times7$ board whose two
+given queens do not attack each other and which admits no completion, and prove that it admits none.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}

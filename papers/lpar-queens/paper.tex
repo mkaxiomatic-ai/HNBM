@@ -5,6 +5,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+\usepackage{caption}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{csquotes}
@@ -21,6 +22,9 @@
 \newcommand{\citeref}[1]{\textcolor{academicpurple}{\cite{#1}}}
 \newcommand{\thmref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Theorem~\ref*{#1}}}}
 \newcommand{\extlink}{~\ensuremath{{}^\text{\faExternalLink}}}
+% TODO before submission: replace COMMIT with the pushed hash, as the main paper does.
+\newcommand{\repo}{https://github.com/mkaratarakis/HNBM/blob/COMMIT}
+\newcommand{\src}[1]{\href{\repo/#1}{\extlink}}
 
 \definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}
 \definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}
@@ -102,6 +106,12 @@ solving the constraints and minimizing the energy are the same task. \secref{sec
 an \textsf{NP}-complete problem this way, \secref{sec:correct} proves the formulation faithful, and
 \secref{sec:solver}--\secref{sec:meas} run the algorithms of~\citeref{liwang2022} on it unchanged.
 
+\medskip\noindent\textbf{Contributions and overview.} The development is about 2\,600 lines of new
+Lean on top of~\citeref{hnbm}, with no \lstinline{sorry}, no \lstinline{native_decide} and no added
+axioms; the headline theorems depend on exactly \lstinline{propext}, \lstinline{Classical.choice} and
+\lstinline{Quot.sound}. \cref{tab:mapping} maps every statement in this paper to its Lean identifier
+and file, and the clickable {\faExternalLink} links to the source.
+
 What is \emph{not} claimed: that the solver is fast --- a short backtracking program beats it on every
 instance, and we give the numbers --- or that any algorithm here is new. What is new is that the
 translation from chessboard to network is proved correct in both directions, so the solver's negative
@@ -168,9 +178,20 @@ equalities, possibly after slack variables. In Lucas's catalogue~\citeref{lucas2
 (\S4.1) needs no slack and graph colouring (\S6.1) one per edge and colour, while vertex cover (\S4.3)
 and the travelling salesman (\S7.2) do not fit at all: they ask for a \emph{best} solution, and
 \eqref{eq:p} cannot express a preference among feasible points. The catalogue has no $n$-queens
-formulation, so the encoding below is ours rather than a transcription. In Lean the data
-of~\eqref{eq:p} is a structure \lstinline{Problem} that mentions no application; graph colouring,
-exact cover, Sudoku and queens are all values of it.
+formulation, so the encoding below is ours rather than a transcription. In Lean the data of~\eqref{eq:p} is one structure, which mentions no
+application; graph colouring, exact cover, Sudoku and queens are all values of it. It stores $A$
+column-wise, since the algorithms only ever ask which rows a given unknown occurs in.
+
+\begin{lstlisting}[caption={The canonical form. Field docstrings omitted.},label={lst:problem}]
+structure Problem where
+  nvars : Nat                     -- number of unknowns
+  nrows : Nat                     -- number of constraints
+  rowsOf : Array (Array Nat)      -- for each unknown, the rows containing it
+  varsOf : Array (Array Nat)      -- for each row, the unknowns occurring in it
+  bhat : Array Int                -- the vector b
+  theta : Array Int               -- 2*theta, so odd degrees stay integral
+  constDoubled : Int              -- ||b||^2
+\end{lstlisting}
 
 \subsection{The objective is an energy}\label{sec:net}
 
@@ -254,6 +275,27 @@ subtraction on $\mathbb{N}$ is truncated, so the test is $i + b = k + a$ instead
 A board is an array of $N$ column indices, $q_i$ being the column of the queen in row $i$, so one
 queen per row is built into the representation. \lstinline{isQueens} is the executable checker: right
 length, every entry on the board, no two rows sharing a column or a diagonal, every given present.
+
+\begin{lstlisting}[caption={The executable checker, and the condition it is proved to decide.},label={lst:spec}]
+def isQueens (I : Instance) (q : Array Nat) : Bool :=
+  (q.size == I.size)
+    && ((List.range I.size).all fun i => q.getD i I.size < I.size)
+    && ((List.range I.size).all fun i => (List.range I.size).all fun i' =>
+          (i == i')
+            || ((q.getD i I.size != q.getD i' I.size)
+                && (i + q.getD i' I.size != i' + q.getD i I.size)
+                && (i + q.getD i I.size != i' + q.getD i' I.size)))
+    && (I.givens.toList.all fun p => q.getD p.1 I.size == p.2)
+
+def Attack (i a k b : Z) : Prop := a = b \/ i - a = k - b \/ i + a = k + b
+
+def IsCompletion (I : Instance) (q : Array Nat) : Prop :=
+  q.size = I.size
+    /\ (forall i < I.size, q.getD i I.size < I.size)
+    /\ (forall i < I.size, forall k < I.size, i /= k ->
+        Not (Attack i (q.getD i I.size) k (q.getD k I.size)))
+    /\ (forall p in I.givens.toList, q.getD p.1 I.size = p.2)
+\end{lstlisting}
 
 \begin{thm}\label{thm:iff}
 If every given queen lies on the board then $p(x) = 0$ implies \lstinline{isQueens (decode x)};
@@ -470,6 +512,48 @@ The natural next step is to certify the trajectory and not only the objective. N
 about the accumulating recurrences of eqs.~(3) and~(6), whereas the memoryless single-neuron chain is
 already covered by~\citeref{hnbm}; a solver restricted to that chain would therefore be certified from
 the chessboard to the last update, which neither this paper nor its predecessor yet achieves.
+
+\section{From the paper to the development}\label{sec:mapping}
+
+\begingroup\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{center}
+\begin{tabular}{@{}p{0.44\textwidth}p{0.30\textwidth}l@{}}
+\toprule
+statement & Lean identifier & file\\
+\midrule
+canonical form \eqref{eq:p}, Listing~\ref{lst:problem} & \lstinline{Problem} & \texttt{QUBO/Problem.lean}\src{HopfieldNet/QUBO/Problem.lean}\\
+\cref{lem:int}, integrality & \lstinline{one_le_penaltyR_of_ne_zero} & \texttt{QUBO/Minimizers.lean}\src{HopfieldNet/QUBO/Minimizers.lean}\\
+\thmref{thm:net}, the objective is an energy & \lstinline{zeroOneHamiltonian_eq} & \texttt{QUBO/Net.lean}\src{HopfieldNet/QUBO/Net.lean}\\
+minimizers are the feasible points & \lstinline{energy_eq_min_iff} & \texttt{QUBO/Minimizers.lean}\\
+the energy gap is at least $\tfrac12$ & \lstinline{half_le_energy_sub_min} & \texttt{QUBO/Minimizers.lean}\\
+the inner loop computes the local field & \lstinline{netVec_eq_localField} & \texttt{QUBO/Refine.lean}\src{HopfieldNet/QUBO/Refine.lean}\\
+descent reaches a stable state & \lstinline{exists_stable} & \texttt{QUBO/Converge.lean}\src{HopfieldNet/QUBO/Converge.lean}\\
+equilibrium concentrates as $T\to0^{+}$ & \lstinline{stationary_infeasible_tendsto_zero} & \texttt{QUBO/Gibbs.lean}\src{HopfieldNet/QUBO/Gibbs.lean}\\
+\midrule
+the queens encoding is well formed & \lstinline{problem_wf}, \lstinline{problem_refines} & \texttt{Queens/Basic.lean}\src{HopfieldNet/QUBO/Instances/Queens/Basic.lean}\\
+\thmref{thm:iff}, soundness & \lstinline{decode_isQueens} & \texttt{Queens/Basic.lean}\\
+\thmref{thm:iff}, completeness & \lstinline{encode_penalty_zero} & \texttt{Queens/Basic.lean}\\
+\thmref{thm:iff}, decision equivalence & \lstinline{exists_zero_iff_queens} & \texttt{Queens/Basic.lean}\\
+Listing~\ref{lst:spec}, the checker is the condition & \lstinline{isQueens_iff} & \texttt{Queens/Spec.lean}\src{HopfieldNet/QUBO/Instances/Queens/Spec.lean}\\
+\dots\ and hence the equivalence in $\mathbb{Z}$ & \lstinline{exists_zero_iff_completion} & \texttt{Queens/Spec.lean}\\
+agreement with an independent checker & \lstinline{isQueens_eq_naive_four/_five} & \texttt{Queens/Spec.lean}\\
+minimizers are exactly the completions & \lstinline{exists_minEnergy_iff} & \texttt{Queens/Converge.lean}\src{HopfieldNet/QUBO/Instances/Queens/Converge.lean}\\
+boards with no completion & \lstinline{blocked4_no_queens}, \lstinline{blocked6_no_queens} & \texttt{Queens/Examples.lean}\src{HopfieldNet/QUBO/Instances/Queens/Examples.lean}\\
+\dots\ including \texttt{blocked7} & \lstinline{blk7_no_queens} & \texttt{Queens/Bench.lean}\src{HopfieldNet/QUBO/Instances/Queens/Bench.lean}\\
+\midrule
+the baseline returns only completions & \lstinline{solve_isQueens} & \texttt{Queens/Baseline.lean}\src{HopfieldNet/QUBO/Instances/Queens/Baseline.lean}\\
+counting completions (OEIS A000170) & \lstinline{count} & \texttt{Queens/Baseline.lean}\\
+Algorithm~2 of~\citeref{liwang2022} & \lstinline{search} & \texttt{QUBO/Search.lean}\src{HopfieldNet/QUBO/Search.lean}\\
+eqs.~(3) and~(6): DHNm and BMm & \lstinline{dhnmStep}, \lstinline{bmmStep} & \texttt{QUBO/Dynamics.lean}\src{HopfieldNet/QUBO/Dynamics.lean}\\
+\secref{sec:meas}, the measurements & \lstinline{table} & \texttt{Queens/Bench.lean}\\
+the widgets of \secref{sec:meas} & \lstinline{animate}, \lstinline{board} & \texttt{Queens/Widget.lean}, \texttt{Interactive.lean}\src{HopfieldNet/QUBO/Instances/Queens/Interactive.lean}\\
+\bottomrule
+\end{tabular}
+\end{center}
+\captionof{table}{Each statement of the paper, its Lean identifier, and the file it lives in.}
+\label{tab:mapping}
+\endgroup
 
 \section*{Acknowledgements}
 % TODO: acknowledgements

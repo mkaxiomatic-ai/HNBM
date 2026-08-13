@@ -440,8 +440,8 @@ better elsewhere. Ma\'{n}dziuk built a binary Hopfield-type network for exactly 
 problem~\citeref{mandziuk1995}, and as \secref{sec:notclaim} records his succeeds where ours does
 not. M\'{e}rida, Mu\~{n}oz and Ben\'{i}tez used the problem as the benchmark for a multivalued recurrent
 network~\citeref{merida2001}. Both descend from Hopfield and Tank's proposal to solve optimization
-problems by minimizing an energy, and from Wilson and Pawley's subsequent finding that doing so is
-delicate. The solver we use belongs to the collaborative neurodynamic framework of Che and
+problems by minimizing an energy~\citeref{hopfieldtank1985}, and from Wilson and Pawley's subsequent
+finding that doing so is delicate~\citeref{wilson1988}. The solver we use belongs to the collaborative neurodynamic framework of Che and
 Wang~\citeref{che2019}, which does come with a global convergence result --- but for an
 augmented-Lagrangian model, not for the momentum recurrences that~\citeref{liwang2022} iterates, and
 that gap is what \secref{sec:net} describes.
@@ -669,6 +669,16 @@ L.~G\"{a}her and F.~Kunze.
 T.~Weber.
 \newblock A SAT-based Sudoku solver.
 \newblock In \emph{LPAR-12 Short Paper Proceedings}, pages 11--15, 2006.
+
+\bibitem{hopfieldtank1985}
+J.~J.~Hopfield and D.~W.~Tank.
+\newblock Neural computation of decisions in optimization problems.
+\newblock \emph{Biological Cybernetics}, 52(3):141--152, 1985.
+
+\bibitem{wilson1988}
+G.~V.~Wilson and G.~S.~Pawley.
+\newblock On the stability of the travelling salesman problem algorithm of Hopfield and Tank.
+\newblock \emph{Biological Cybernetics}, 58(1):63--70, 1988.
 
 \end{thebibliography}
 

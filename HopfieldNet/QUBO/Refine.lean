@@ -114,7 +114,7 @@ private theorem rowSums_aux (P : Problem) (hW : P.Wf) (x : Array Bool) (r : Nat)
       rw [ih _ (fun y hy => hlt y (List.mem_cons_of_mem _ hy)) (by rw [hsz]; exact hr),
         ← Array.foldl_toList, scatter_list r _ ρ hnd hr]
       have hmem : (r ∈ (P.rowsOf.getD u #[]).toList) = ((P.rowsOf.getD u #[]).contains r = true) := by
-        simp [Array.contains_iff_mem]
+        simp
       simp only [hx, Bool.true_and]
       by_cases hc : (P.rowsOf.getD u #[]).contains r = true
       · rw [if_pos (by rw [hmem]; exact hc), if_pos hc]; push_cast; ring
@@ -181,7 +181,7 @@ theorem rowSumR_eq (P : Problem) (hW : P.Wf) (x : Array Bool) {r : Nat} (hr : r 
     intro u
     unfold Ahat bit bitsOf inRow
     by_cases h1 : x.getD u.val false = true <;>
-      by_cases h2 : (P.rowsOf.getD u.val #[]).contains r = true <;> simp [h1, h2]
+      by_cases h2 : (P.rowsOf.getD u.val #[]).contains r = true <;> simp [h1]
   have hfin : (Finset.range P.nvars).filter
       (fun i => (x.getD i false && (P.rowsOf.getD i #[]).contains r) = true)
       = ((List.range P.nvars).filter

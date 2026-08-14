@@ -1,0 +1,1106 @@
+% n-Queens Completion as the energy of a {0,1} Boltzmann machine, certified in Lean 4, with the
+% collaborative neurodynamic algorithms of Li and Wang run on it.  Everything here is
+% HopfieldNet/QUBO/ and HopfieldNet/QUBO/Instances/Queens/.
+%
+% Written in the format and register of a short conference paper: rules, translation, what is
+% proved, the search, results, concluding remarks.  Nothing is claimed that the development does not
+% carry; where the certification stops is stated rather than elided.
+%
+% Provenance of the numbers.  The two tables come from
+%   lake build HopfieldNet.QUBO.Instances.Queens.Bench   -- ~16 min
+% and the encoding counts are cross-checked independently by a script under scripts/.
+%
+% Every board drawn below is one of the corpus instances of
+%   HopfieldNet/QUBO/Instances/Queens/Bench.lean:80
+% and is restated as a #guard in Figures.lean.  The chessboards use the same normalised outline and
+% palette as the interactive widget, so a figure here and a frame in the infoview are the same
+% picture.
+%
+% NOTE: copy `easychair.cls` and `lstlean.tex` from the main paper's directory next to this file.
+\documentclass{easychair}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{caption}
+% `H' pins a float exactly where it is written, instead of letting it drift to the top of a page.
+\usepackage{float}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{csquotes}
+\usepackage{fontawesome}
+\usepackage{tikz}
+
+% The environment structure of the HNBM paper: theorems, lemmas, propositions, corollaries and
+% remarks share one counter; definitions carry their own.
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{theorem}[thm]{Theorem}
+\newtheorem{lemma}[thm]{Lemma}
+\newtheorem{proposition}[thm]{Proposition}
+\newtheorem{corollary}[thm]{Corollary}
+\newtheorem{remark}[thm]{Remark}
+\newtheorem{definition}{Definition}[section]
+% A `proof' environment without amsthm, so that nothing depends on the class's theorem package.
+\makeatletter
+\@ifundefined{proof}
+  {\newenvironment{proof}{\par\noindent\textit{Proof.}\ }{\hfill$\square$\par\medskip}}{}
+\makeatother
+
+\definecolor{academicpurple}{rgb}{0.4,0.0,0.35}
+\newcommand{\secref}[1]{\hyperref[#1]{\textcolor{academicpurple}{\S\ref*{#1}}}}
+\newcommand{\citeref}[1]{\textcolor{academicpurple}{\cite{#1}}}
+\newcommand{\thmref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Theorem~\ref*{#1}}}}
+\newcommand{\lemref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Lemma~\ref*{#1}}}}
+\newcommand{\propref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Proposition~\ref*{#1}}}}
+\newcommand{\corref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Corollary~\ref*{#1}}}}
+\newcommand{\remref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Remark~\ref*{#1}}}}
+\newcommand{\defref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Definition~\ref*{#1}}}}
+\newcommand{\tabref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Table~\ref*{#1}}}}
+\newcommand{\figref}[1]{\textcolor{academicpurple}{\hyperref[#1]{Figure~\ref*{#1}}}}
+\newcommand{\extlink}{~\ensuremath{{}^\text{\faExternalLink}}}
+%%% Source links.  `\reporef' is the commit the line numbers below were taken from; every anchor in
+%%% this paper was checked against it.  For the links to resolve, that commit must be reachable
+%%% from a ref pushed to `\repoowner' -- as of writing it is NOT: the queens development lives only
+%%% on the local branch `bump-mathlib-4.32', and neither `origin/main' nor the fork contains
+%%% `HopfieldNet/QUBO/Instances/Queens/'.  Push it, then run
+%%%   bash scripts/check_paper_links.sh papers/lpar-queens/sat-queens.tex
+%%% which fetches every link and fails on the first one that does not return 200.  If the commit
+%%% changes, re-run that script: the line numbers move with it.
+\newcommand{\repoowner}{mkaratarakis/HNBM}
+\newcommand{\reporef}{1bd91612ee31180f6c99fa11090b713f3012ead4}
+\newcommand{\repo}{https://github.com/\repoowner/blob/\reporef}
+\newcommand{\src}[1]{\href{\repo/#1}{\extlink}}
+% \srcl{path}{line} -- the clickable symbol, anchored at the declaration itself.
+\newcommand{\srcl}[2]{\href{\repo/#1\#L#2}{\extlink}}
+% Shorthands for the two directories every link below sits in.
+\newcommand{\qsrc}[2]{\srcl{HopfieldNet/QUBO/Instances/Queens/#1}{#2}}
+\newcommand{\qusrc}[2]{\srcl{HopfieldNet/QUBO/#1}{#2}}
+
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1}
+\definecolor{codebg}{rgb}{0.96,0.96,0.99}
+\definecolor{codeframe}{rgb}{0.75,0.70,0.80}
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean,
+  basicstyle=\fontsize{8.4}{9.8}\selectfont\ttfamily,
+  backgroundcolor=\color{codebg},
+  frame=single, framerule=0.5pt, rulecolor=\color{codeframe},
+  framesep=4pt, xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=4pt, belowskip=4pt}
+
+%%% ------------------------------------------------------------------- chessboards
+%%% Palette and queen outline taken from queensBoard.js, so that the figures below and the widget
+%%% are the same picture.  A square is addressed (column, -row) with row 0 at the top, matching the
+%%% representation used throughout: q_i is the column of the queen in row i.
+\definecolor{sqlight}{HTML}{F0D9B5}
+\definecolor{sqdark}{HTML}{B58863}
+\definecolor{sqedge}{HTML}{8A6242}
+\definecolor{attackc}{HTML}{C0392B}
+\definecolor{qdarkbody}{HTML}{26221E}
+\definecolor{qdarkedge}{HTML}{0D0B0A}
+\definecolor{qlitebody}{HTML}{FBFAF7}
+\definecolor{qliteedge}{HTML}{4A423A}
+\definecolor{cRow}{HTML}{1F5FA8}
+\definecolor{cCol}{HTML}{1E7A48}
+\definecolor{cDiag}{HTML}{B26B00}
+\definecolor{cAnti}{HTML}{6B3FA0}
+
+%%% Every macro below is prefixed `qc' so that nothing here can collide with the document class or
+%%% with a package loaded later.  `qcpic' opens a picture whose baseline is its centre, so boards of
+%%% different sizes line up when set side by side in a tabular.
+\newenvironment{qcpic}[1]
+  {\begin{tikzpicture}[x=#1,y=#1,baseline=(current bounding box.center)]}
+  {\end{tikzpicture}}
+
+% \qcboard{N} -- the squares and the frame of an N x N board.
+\newcommand{\qcboard}[1]{%
+  \pgfmathtruncatemacro{\qcn}{#1-1}%
+  \foreach \qci in {0,...,\qcn}{\foreach \qcj in {0,...,\qcn}{%
+    \pgfmathtruncatemacro{\qcmix}{mod(\qci+\qcj,2)==0 ? 100 : 0}%
+    \fill[sqlight!\qcmix!sqdark] (\qcj,-\qci) rectangle ++(1,-1);}}%
+  \draw[sqedge,line width=0.5pt] (0,0) rectangle (#1,-#1);}
+
+% \qcglyph{col}{row}{body}{edge} -- one queen, from the widget's outline.
+\newcommand{\qcglyph}[4]{%
+  \begin{scope}[shift={(#1,-#2)},line join=round,line width=0.35pt,draw=#4,fill=#3]
+    \filldraw (0.14,-0.255) -- (0.265,-0.45) -- (0.32,-0.185) -- (0.41,-0.45)
+      -- (0.50,-0.155) -- (0.59,-0.45) -- (0.68,-0.185) -- (0.735,-0.45)
+      -- (0.86,-0.255) -- (0.80,-0.555) -- (0.20,-0.555) -- cycle;
+    \filldraw[rounded corners=0.5pt] (0.175,-0.555) rectangle (0.825,-0.640);
+    \filldraw (0.255,-0.64) .. controls (0.255,-0.78) and (0.205,-0.83) .. (0.165,-0.875)
+      -- (0.835,-0.875) .. controls (0.795,-0.83) and (0.745,-0.78) .. (0.745,-0.64) -- cycle;
+    \filldraw[rounded corners=0.5pt] (0.125,-0.875) rectangle (0.875,-0.950);
+    \foreach \qcu/\qcv in {0.14/0.235, 0.32/0.165, 0.50/0.135, 0.68/0.165, 0.86/0.235}
+      \filldraw (\qcu,-\qcv) circle (0.072);
+  \end{scope}}
+% A given queen is dark, a queen the solver placed is light -- the widget's convention.
+\newcommand{\qcdark}[2]{\qcglyph{#2}{#1}{qdarkbody}{qdarkedge}}
+\newcommand{\qclite}[2]{\qcglyph{#2}{#1}{qlitebody}{qliteedge}}
+% \qcgivens{i/j,...} -- reads exactly like the Lean array literal #[(i,j),...].
+\newcommand{\qcgivens}[1]{\foreach \qcgi/\qcgj in {#1}{\qcdark{\qcgi}{\qcgj}}}
+% \qcplace{q_0,...,q_{N-1}} -- reads exactly like the Lean array #[q_0,...,q_{N-1}].
+\newcommand{\qcplace}[1]{%
+  \foreach \qccol [count=\qcrow from 0] in {#1}{\qclite{\qcrow}{\qccol}}}
+% \qcrule{colour}{i}{j}{i'}{j'} -- one row of A-hat, as a capsule through the centres of its squares.
+\newcommand{\qcrule}[5]{%
+  \draw[#1,line cap=round,opacity=0.42,line width=0.30cm]
+    ({#3+0.5},{-#2-0.5}) -- ({#5+0.5},{-#4-0.5});}
+% \qcmark{i}{j} -- outline one square.
+\newcommand{\qcmark}[2]{\draw[black,line width=0.9pt] (#2,-#1) rectangle ++(1,-1);}
+% \qcattack{i}{j}{i'}{j'} -- the widget's attack indicator: tinted squares and a dashed segment.
+\newcommand{\qcattack}[4]{%
+  \fill[attackc,opacity=0.28] (#2,-#1) rectangle ++(1,-1);
+  \fill[attackc,opacity=0.28] (#4,-#3) rectangle ++(1,-1);
+  \draw[attackc,line width=0.8pt,dash pattern=on 2.4pt off 1.4pt]
+    ({#2+0.5},{-#1-0.5}) -- ({#4+0.5},{-#3-0.5});}
+% \qcnames{N} -- the name of the variable of every square, in the square.
+\newcommand{\qcnames}[1]{%
+  \pgfmathtruncatemacro{\qcn}{#1-1}%
+  \foreach \qci in {0,...,\qcn}{\foreach \qcj in {0,...,\qcn}{%
+    \node[font=\tiny] at ({\qcj+0.5},{-\qci-0.5}) {$x_{\qci\qcj}$};}}}
+\newcommand{\qclab}[1]{{\footnotesize #1}}
+
+% Loaded last, and only if the class has not already done so: \secref and \src need \hyperref and
+% \href, and an undefined one of those is a hard error rather than a bad box.
+\usepackage{hyperref}
+
+\title{A Certified Neurodynamic Solver for $n$-Queens Completion}
+
+\titlerunning{A Certified Neurodynamic Solver for $n$-Queens Completion}
+
+\author{
+Matteo Cipollina\inst{1}
+\and
+Michail Karatarakis\inst{2}
+\and
+Freek Wiedijk\inst{2}
+}
+
+\institute{
+  Axiomatic AI, Barcelona, Spain\\
+  \email{matteo.cipollina@yahoo.it}
+\and
+  Radboud University, Nijmegen, The Netherlands\\
+  \email{michail.karatarakis@ru.nl, freek@cs.ru.nl}\\
+}
+
+\authorrunning{Cipollina, Karatarakis and Wiedijk}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper presents a certified neurodynamic solver for $n$-Queens Completion. An instance is
+translated into a quadratic objective on $N^{2} + 4N - 6$ binary neurons whose minimum is attained
+if and only if the instance has a completion, and a board can be read off any state attaining it.
+The objective is proved to be the energy of a $\{0,1\}$ Boltzmann machine, and every infeasible
+state is proved to lie at least $\tfrac12$ above the minimum, so a population of such machines run
+collaboratively --- with a particle swarm rule re-initializing them whenever the population
+converges --- applies to it unchanged. Little coding was necessary to implement this solver: the
+network, its dynamics and the collaborative search are supplied by an existing formalization of the
+two models in the Lean~4 proof assistant, and only the constraints on a completion had to be
+specified in the prover's logic. The translation itself, however, is not left to inspection. It is
+proved sound and complete, and the Boolean checker against which those properties are stated is in
+turn proved to decide the chess condition written over the integers, so a run that reaches the
+minimum establishes a theorem about the board. Results on eleven completable and seven blocked
+instances are reported against a certified backtracking baseline; on six of the seven blocked
+instances the absence of a completion is itself a theorem, and what the certification does not
+cover is stated rather than elided.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+
+$n$-Queens Completion is a placement puzzle. Given an $N \times N$ chessboard --- most frequently
+the ordinary $8 \times 8$ board --- with queens standing on some of its squares (the
+\enquote{givens}), the aim is to place further queens until there are $N$ of them, so that no two
+share a row, a column or a diagonal. \figref{fig:example} shows an instance on the left, along with
+its unique completion on the right. Note that the columns of the board, unlike the digits of a
+number puzzle, cannot be replaced by arbitrary symbols: two queens share a diagonal exactly when
+their row and column indices have equal difference or equal sum, so the arithmetic of those indices
+is part of the puzzle. The plain problem, in which nothing is given, has been studied since 1848 and has a
+solution for every $N \ge 4$, by explicit construction~\citeref{bell2009}.
+
+The completion problem is harder than the plain one, and harder than it looks. Deciding whether an
+instance has a completion is \textsf{NP}-complete, and counting the completions is
+$\#\textsf{P}$-complete~\citeref{gent2017}. Whether a completion exists depends on the givens in a
+way that is not local: two queens that share no row, no column and no diagonal can already rule one
+out, and \figref{fig:hard} shows a $7 \times 7$ board on which they do. Solvers for the problem
+exist, and at the sizes considered here backtracking with constraint propagation settles an instance
+quickly. What it does not settle is the negative answer. A search that finds no completion has
+established nothing about the board, and for this problem the instances worth posing are exactly
+those that have none.
+
+In this paper we propose a neurodynamic approach. Discrete Hopfield networks~\citeref{hopfield1982}
+and Boltzmann machines~\citeref{ackley1985} settle into states of low energy, so a constraint problem
+can be attacked by writing its constraints as an energy and letting a network descend it. An
+instance of $n$-Queens Completion is translated into such an energy, on $N^{2} + 4N - 6$ binary
+neurons, whose minimum is attained if and only if the instance has a completion; a board can then be
+read off the state the network stops at. A single network stops at the first state no update
+improves, which is rarely a minimum, so we use the collaborative scheme of Li and
+Wang~\citeref{liwang2022}: a population of networks is run concurrently and their initial states are
+re-drawn by a particle swarm rule whenever the population converges.
+
+The translation is simple and required little implementation effort, since the energy, the network
+it defines, its dynamics and the collaborative search are supplied unchanged by an existing
+formalization of the two models in the Lean~4 proof assistant~\citeref{lean4,hnbm}; only the
+constraints of the puzzle had to be specified. What did take effort is that the translation is not
+left to inspection. It is proved sound and complete, the checker against which those properties are
+stated is itself proved to decide the chess condition written over the integers, and the objective
+is proved to be the energy of the network said to be descending it. A run that ends at the minimum
+therefore establishes a theorem about the board; a run that ends above it establishes nothing, and
+the boards with no completion are refuted by other means, on six of the seven in \tabref{tab:blocked}
+by proof.
+
+\begin{figure}[H]
+\centering
+\begin{tabular}{@{}c@{\hspace{2.6em}}c@{}}
+\begin{qcpic}{0.46cm}
+  \qcboard{8}\qcgivens{0/0,1/4,2/7}
+\end{qcpic}
+&
+\begin{qcpic}{0.46cm}
+  \qcboard{8}\qcplace{0,4,7,5,2,6,1,3}\qcgivens{0/0,1/4,2/7}
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) an instance} & \qclab{(b) its completion}
+\end{tabular}
+\caption{An $n$-Queens Completion instance and its solution. Given queens are dark and queens the
+solver placed are light, which is the convention of the development's board widget. This instance
+has exactly one completion.}\label{fig:example}
+\end{figure}
+
+\section{Implementation in Lean 4}\label{sec:rules}
+
+An implementation of the rules of $n$-Queens Completion in the Lean~4 proof assistant is
+straightforward. An \emph{instance} is a pair $(N, G)$ with $N \in \mathbb{N}$ the side of the
+board and $G \subseteq \{0,\dots,N-1\}^{2}$ the givens, listed as (row, column) pairs. A board is
+modelled by an array $q$ of natural numbers, $q_i$ denoting its entry at $i$ --- the column of the
+queen in row $i$ --- read with the out-of-range default $N$, so that a missing entry violates the
+bound in \defref{def:completion}(ii) below rather than passing silently. One queen per row is thus
+built into the representation, and what remains is a condition on pairs of rows. We say that two
+queens \emph{attack} each other iff they stand in the same column, on the same difference diagonal,
+or on the same sum diagonal.
+
+\begin{definition}[attack]\label{def:attack}
+For $i, a, k, b \in \mathbb{Z}$ (\lstinline{Attack})\qsrc{Spec.lean}{37},
+\[
+  \mathrm{Attack}(i,a,k,b)
+  \quad:\Longleftrightarrow\quad
+  a = b \;\;\lor\;\; i - a = k - b \;\;\lor\;\; i + a = k + b .
+\]
+\end{definition}
+
+Indexing the $N^{2}$ squares of the board as in \figref{fig:vars}, we can now say what it means for
+$q$ to complete the instance: it has one entry per row, every entry is a column of the board, no
+two queens attack, and every given is present.
+
+\begin{definition}[completion]\label{def:completion}
+An array $q$ of natural numbers is a \emph{completion} of $(N,G)$
+(\lstinline{IsCompletion})\qsrc{Spec.lean}{44} iff
+\begin{enumerate}
+\item[(i)]   $\lvert q\rvert = N$;
+\item[(ii)]  $q_i < N$ for every $i < N$;
+\item[(iii)] $\lnot\,\mathrm{Attack}(i, q_i, k, q_k)$ for all $i, k < N$ with $i \ne k$, the four
+             indices being taken in $\mathbb{Z}$;
+\item[(iv)]  $q_r = c$ for every $(r,c) \in G$.
+\end{enumerate}
+\end{definition}
+
+\defref{def:attack} is stated over $\mathbb{Z}$, so that its two diagonal conditions are literal
+differences and sums; in (iii) the natural-number indices are coerced. That is not how the
+development computes, and the discrepancy is the reason the next theorem is worth proving.
+
+\begin{theorem}[the checker decides the condition]\label{thm:spec}
+For every instance and every array $q$, the executable checker
+\lstinline{isQueens}\qsrc{Basic.lean}{613} returns \lstinline{true} if and only if $q$ is a completion
+in the sense of \defref{def:completion} (\lstinline{isQueens_iff})\qsrc{Spec.lean}{57}.
+\end{theorem}
+
+\begin{remark}\label{rem:checker}
+Two features of the checker make \thmref{thm:spec} more than bookkeeping. First, it indexes squares
+by natural numbers, on which subtraction is truncated --- $2 - 5$ is $0$, not $-3$ --- so the
+literal transcription of $i - a = k - b$ is wrong, and the checker tests the rearranged form
+$i + q_k \ne k + q_i$ instead. That rearrangement is valid over $\mathbb{Z}$ and is exactly the kind
+of step that is easy to get backwards. Second, clauses (ii) and (iv) are stated through the
+defaulting accessor described above, which is a coding convenience and not a statement about chess.
+After \thmref{thm:spec} the specification a reader has to trust is \defref{def:completion}, which
+mentions no arrays, no defaults and no truncated arithmetic. As an independent check the checker is
+compared against a separately written implementation over $\mathbb{Z}$
+(\lstinline{naive}\qsrc{Spec.lean}{130}) --- a list-based pairwise scan with real subtraction, no array
+and no default --- exhaustively on all $4^{4}$ boards of size four and all $5^{5}$ of size five
+(\lstinline{isQueens_eq_naive_four}\qsrc{Spec.lean}{141},
+\lstinline{isQueens_eq_naive_five}\qsrc{Spec.lean}{145}).
+\end{remark}
+
+The next section translates \defref{def:completion} into an energy.
+
+\begin{figure}[H]
+\centering
+\begin{tabular}{@{}c@{\hspace{2.6em}}c@{}}
+\begin{qcpic}{0.86cm}
+  \qcboard{5}\qcnames{5}
+\end{qcpic}
+&
+\begin{qcpic}{0.86cm}
+  \qcboard{5}
+  \qcrule{cRow}{2}{0}{2}{4}
+  \qcnames{5}
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) the squares} & \qclab{(b) one board row}
+\end{tabular}
+\caption{The squares of a $5 \times 5$ board and their neurons. (a) $x_{ij} = 1$ means that a queen
+stands in row $i$ and column $j$. (b) The five neurons of board row $2$ carry one queen between
+them, which is the constraint~\eqref{eq:form-row}; the capsule is the row of $A$ that says
+so.}\label{fig:vars}
+\end{figure}
+
+\section{Translation to a Boltzmann machine}\label{sec:qubo}
+
+Fix an instance $(N,G)$ with $N \ge 2$. We encode a board by introducing one binary neuron for each
+square of the grid, i.e.\ $N^{2}$ neurons, together with one auxiliary neuron for each diagonal that
+can carry a conflict. Each neuron $x_{ij}$ (with $0 \le i, j < N$) represents the truth value of the
+statement that a queen stands on the square in row $i$ and column $j$; each auxiliary neuron records
+that its diagonal is empty. For $0 \le d \le 2N-4$ put
+\begin{equation}\label{eq:diags}
+  D_d = \{(i,j) : 0 \le i,j < N,\ i - j = d + 2 - N\},
+  \qquad
+  A_d = \{(i,j) : 0 \le i,j < N,\ i + j = d + 1\} .
+\end{equation}
+Since $i - j$ ranges over $-(N-1),\dots,N-1$ and $i + j$ over $0,\dots,2N-2$, the two families
+\eqref{eq:diags} enumerate exactly the diagonals containing at least two squares: the four omitted
+values are the extremes, and each of those diagonals is a single corner, which cannot carry two
+queens. There are $2N-3$ of each. The rules of \defref{def:completion} then become the linear system
+\begin{subequations}\label{eq:form}
+\begin{align}
+  \textstyle\sum_{j} x_{ij} &= 1, & i &= 0,\dots,N-1, \label{eq:form-row}\\
+  \textstyle\sum_{i} x_{ij} &= 1, & j &= 0,\dots,N-1, \label{eq:form-col}\\
+  \textstyle\sum_{(i,j)\in D_d} x_{ij} + s^{-}_{d} &= 1, & d &= 0,\dots,2N-4, \label{eq:form-diag}\\
+  \textstyle\sum_{(i,j)\in A_d} x_{ij} + s^{+}_{d} &= 1, & d &= 0,\dots,2N-4, \label{eq:form-anti}\\
+  x_{ij} &= 1, & (i,j) &\in G, \label{eq:form-giv}
+\end{align}
+\end{subequations}
+in the unknowns $x_{ij}, s^{-}_{d}, s^{+}_{d} \in \{0,1\}$. Equation~\eqref{eq:form-row} is the
+representation of \secref{sec:rules} written out: each board row carries exactly one queen, which is
+clauses (i) and (ii) of \defref{def:completion}. Equation~\eqref{eq:form-giv} is clause (iv). The
+remaining two families are clause (iii), and they deserve an argument, because
+\defref{def:attack} treats the column and the two diagonals alike whereas \eqref{eq:form} does not.
+
+\subsection*{Why the columns admit an equality and the diagonals do not}
+
+\begin{lemma}[the column condition is a covering condition]\label{lem:pigeon}
+Let $q$ satisfy clauses (i)--(iii) of \defref{def:completion}. Then for every $j < N$ there is
+exactly one $i < N$ with $q_i = j$ (\lstinline{exists_row_of_col})\qsrc{Basic.lean}{991}.
+\end{lemma}
+
+\begin{proof}
+By (ii) the map $i \mapsto q_i$ sends $\{0,\dots,N-1\}$ into itself, and by (iii) with the first
+disjunct of \defref{def:attack} it is injective. An injective self-map of a finite set is a
+bijection, so each $j$ has exactly one preimage. Uniqueness is where the development uses it, in
+\lstinline{encode_hitList_colRow}\qsrc{Basic.lean}{1045}.
+\end{proof}
+
+\lemref{lem:pigeon} is what licenses \eqref{eq:form-col}: \enquote{no two queens share a column} and
+\enquote{every column carries exactly one queen} agree on boards satisfying (i)--(iii), and only the
+second is a linear equation. Nothing of the sort holds for the diagonals. A board has $2N-1$
+diagonals in each direction and carries only $N$ queens, so on any completion at least $N-1$ of them
+are empty and the covering statement is plainly false. A diagonal constraint is therefore genuinely
+\emph{at most one}, which \eqref{eq:form} cannot say directly; the standard device recovers it.
+
+\begin{lemma}[at most one, by one auxiliary neuron]\label{lem:slack}
+For a set $S$ of neurons and a fresh Boolean $s$, the constraint $\sum_{u \in S}x_u + s = 1$ is
+satisfiable iff $\sum_{u \in S}x_u \le 1$, and then $s = 1 - \sum_{u \in S}x_u$.
+\end{lemma}
+
+If the diagonal is empty the auxiliary neuron takes up the slack; if it carries one queen the
+auxiliary neuron is $0$; if it carries two, no value of it satisfies the row, which then contributes
+at least $1$ to the objective. The development has no separate lemma for this: it is the shape of
+the rows themselves, and it is used through
+\lstinline{exists_diag_slack}\qsrc{Basic.lean}{268} and \lstinline{exists_anti_slack}. One auxiliary neuron suffices however long the diagonal is. This
+asymmetry between \eqref{eq:form-col} and \eqref{eq:form-diag}--\eqref{eq:form-anti} is the only
+point at which
+\eqref{eq:form} is not a transcription of \defref{def:completion}, and every structural peculiarity
+below --- the $4N-6$ surplus neurons, the non-uniform degrees, the half-integral thresholds ---
+follows from it.
+
+\subsection*{The shape of the system}
+
+Collect~\eqref{eq:form-row}--\eqref{eq:form-giv} into a matrix $A \in \{0,1\}^{m \times n}$,
+one row per equation and one column per neuron, with $A_{r,u} = 1$ exactly when the neuron $u$
+occurs in the row $r$, and put $b = \mathbf{1} \in \mathbb{Z}^{m}$. Write
+$\deg(u) = \sum_{r} A_{r,u}$ for the number of rows containing $u$.
+
+\begin{proposition}[shape of the system]\label{prop:sizes}
+For $N \ge 2$ the system \eqref{eq:form} has
+\begin{equation}\label{eq:sizes}
+  n \;=\; N^{2} + 2(2N-3) \;=\; N^{2} + 4N - 6
+  \qquad\text{and}\qquad
+  m \;=\; 2N + 2(2N-3) + |G| \;=\; 6N - 6 + |G| .
+\end{equation}
+Moreover $\deg(u) \in \{1,3,4,5\}$ for every neuron $u$, and no two distinct neurons occur together
+in more than one row; equivalently, $A^{\top}\!A$ takes only the values $0$ and $1$ off its
+diagonal.
+\end{proposition}
+
+\begin{proof}
+The counts are immediate from \eqref{eq:form} and from there being $2N-3$ diagonals in each
+direction. An auxiliary neuron occurs in the single row of its own diagonal, so its degree is $1$. A
+square $(i,j)$ occurs in the row \eqref{eq:form-row} of $i$, the row \eqref{eq:form-col} of $j$, the
+row \eqref{eq:form-diag} of its difference diagonal when that diagonal lies in the family
+\eqref{eq:diags}, the row \eqref{eq:form-anti} of its sum diagonal likewise, and one row
+\eqref{eq:form-giv} when $(i,j) \in G$. The diagonals outside \eqref{eq:diags} are those with
+$i - j = \pm(N-1)$ or $i + j \in \{0, 2N-2\}$, and each consists of a single corner; the four
+corners are therefore exactly the squares lying on one such diagonal, and each lies on exactly one.
+So a corner has degree $3$ and every other square degree $4$, in either case one more if the square
+carries a given. For the last claim: two distinct auxiliary neurons share no row; an auxiliary
+neuron shares only its own diagonal row with a square; a row \eqref{eq:form-giv} contains a single
+neuron; and two distinct squares lie in a common row only if they agree in board row, in column, in
+difference or in sum, and any two of those four agreements force the squares to coincide.
+\end{proof}
+
+\noindent The counts (\lstinline{nvars}\qsrc{Basic.lean}{148}, \lstinline{nrows}\qsrc{Basic.lean}{155})
+and the degrees
+(\lstinline{rowsOf})\qsrc{Basic.lean}{320} are guarded in the development. The last claim is proved
+here only, and is one of the two statements in this paper with no counterpart in it.
+
+On the ordinary board with no givens, \eqref{eq:sizes} gives $n = 90$ and $m = 42$, and
+$A^{\top}\!A$ has $852$ nonzero off-diagonal entries, $728$ joining two squares and $124$
+joining a square to the auxiliary neuron of a diagonal through it. \figref{fig:inc} draws the rows
+through one square.
+
+\begin{remark}[indexing without subtraction]\label{rem:onslack}
+The membership conditions of \eqref{eq:diags} are differences, and the development indexes squares by
+natural numbers, on which subtraction is truncated. They are therefore tested additively
+(\lstinline{onSlack})\qsrc{Basic.lean}{193}: with the $2(2N-3)$ diagonal rows numbered by $e$, the
+square $(i,j)$ lies on the $e$-th exactly when
+\begin{equation}\label{eq:onslack}
+  i + N = e + 2 + j \quad\text{if } e < 2N-3, \qquad\qquad
+  i + j + (2N-3) = e + 1 \quad\text{otherwise,}
+\end{equation}
+the first $2N-3$ values of $e$ indexing the $D_d$ and the rest the $A_d$. Over $\mathbb{Z}$ the two
+conditions are $i - j = e + 2 - N$ and $i + j = (e - (2N-3)) + 1$, which is \eqref{eq:diags}; neither
+form ever subtracts.
+\end{remark}
+
+\subsection*{The energy}
+
+Recall from~\citeref{hnbm} that a Hopfield network on a finite neuron set $U$ with $|U| = n$ carries
+a symmetric weight matrix $W = (w_{uv})_{u,v \in U}$ with zero diagonal and one threshold $\theta_u$
+per neuron. A state assigns an activation to each neuron; for the $\{0,1\}$ two-state instance,
+which is the one used here, we write it as a vector $x \in \{0,1\}^{n}$, and its energy is
+\begin{equation}\label{eq:E}
+  E(x) \;=\; -\tfrac12\sum_{u \ne v} w_{uv}\,x_u x_v \;+\; \sum_u \theta_u x_u .
+\end{equation}
+Write $\ell_u(x) = \sum_v w_{uv}x_v - \theta_u$ for the \emph{local field} at $u$. The network
+updates one neuron at a time, setting $x_u$ to $1$ when $\ell_u(x) > 0$ and to $0$ otherwise; such
+asynchronous updates never increase $E$ and reach a stable state in finitely many steps, provided
+the update order is fair --- a condition that~\citeref{hnbm} found to be necessary and absent from
+textbook statements. A Boltzmann machine keeps \eqref{eq:E} and makes the update stochastic: $x_u$
+becomes $1$ with probability $\bigl(1 + e^{-\ell_u(x)/T}\bigr)^{-1}$ at temperature $T > 0$. At
+fixed $T$ the resulting chain is ergodic, with the Boltzmann law $\propto e^{-E(x)/T}$ as its unique
+stationary distribution; that uniqueness is the Perron--Frobenius result of~\citeref{hnbm} and is
+what \corref{cor:gibbs} below rests on. A point of $\{0,1\}^{n}$ solves \eqref{eq:form}
+exactly when the squared residual $\lVert Ax - b\rVert^2$ vanishes --- such a point is called
+\emph{feasible} --- so the decision problem is the minimization of a quadratic form in binary
+variables, a quadratic unconstrained binary optimization
+problem~\citeref{lucas2014,glover2019}. The following identity, which holds for any
+system of the shape \eqref{eq:form} and not only for the queens one, says that this form is that
+energy after an affine change of scale.
+
+\begin{proposition}[the objective is an energy]\label{prop:energy}
+Let
+\begin{equation}\label{eq:p}
+  p(x) \;=\; \lVert Ax - b\rVert^2
+        \;=\; \sum_{r=1}^{m}\Bigl(\ \sum_{u \in r} x_u - b_r\ \Bigr)^{\!2} ,
+\end{equation}
+and put
+\begin{equation}\label{eq:WT}
+  w_{uv} = -(A^{\top}\!A)_{uv} \ \ (u \ne v), \qquad
+  w_{uu} = 0, \qquad
+  \theta_u = \tfrac12\deg(u) - \sum_{r \ni u} b_r .
+\end{equation}
+Then $E(x) = \tfrac12\bigl(p(x) - \lVert b\rVert^2\bigr)$ for every $x \in \{0,1\}^{n}$
+(\lstinline{zeroOneHamiltonian_eq})\qusrc{Net.lean}{353}. Hence $E$
+attains its minimum $-\tfrac12\lVert b\rVert^2$ exactly at the feasible states
+(\lstinline{minEnergy}, \lstinline{energy_eq_min_iff}\qusrc{Minimizers.lean}{130}), and every other
+state lies at least $\tfrac12$ above it
+(\lstinline{half_le_energy_sub_min}\qusrc{Minimizers.lean}{145}).
+\end{proposition}
+
+\begin{proof}
+Since $A$ is $0/1$ we have $(A^{\top}\!A)_{uu} = \deg(u)$, and
+$b^{\top}\!Ax = \sum_u\bigl(\sum_{r \ni u} b_r\bigr)x_u$. Expanding \eqref{eq:p},
+\[
+  p(x) \;=\; x^{\top}\!A^{\top}\!Ax - 2\,b^{\top}\!Ax + \lVert b\rVert^2
+       \;=\; \sum_{u \ne v}(A^{\top}\!A)_{uv}x_ux_v \;+\; \sum_u \deg(u)\,x_u^{2}
+             \;-\; 2\sum_u\Bigl(\sum_{r \ni u}b_r\Bigr)x_u \;+\; \lVert b\rVert^2 .
+\]
+The diagonal term is quadratic, and the quadratic part of \eqref{eq:E} ranges only over $u \ne v$;
+since $x_u \in \{0,1\}$ we may replace $x_u^{2}$ by $x_u$, making it linear. Substituting
+\eqref{eq:WT} into the three remaining sums,
+\[
+  \sum_{u \ne v}(A^{\top}\!A)_{uv}x_ux_v = -\sum_{u \ne v}w_{uv}x_ux_v ,
+  \qquad
+  \sum_u \deg(u)\,x_u - 2\sum_u\Bigl(\sum_{r \ni u}b_r\Bigr)x_u = 2\sum_u \theta_u x_u ,
+\]
+the second because $2\theta_u = \deg(u) - 2\sum_{r \ni u}b_r$. Hence
+$p(x) = 2E(x) + \lVert b\rVert^2$. For the rest, $p$ is a sum of squares of integers, so
+$p(x) \ge 0$ with equality exactly when every row of \eqref{eq:form} holds, and $p(x) \ne 0$ forces
+$p(x) \ge 1$ (\lstinline{one_le_penaltyR_of_ne_zero}\qusrc{Minimizers.lean}{84}).
+\end{proof}
+
+Here $b = \mathbf{1}$, so $\lVert b\rVert^2 = m$ and $\sum_{r \ni u}b_r = \deg(u)$, whence
+$\theta_u = -\tfrac12\deg(u)$ and the minimum is $-\tfrac12 m$. \eqref{eq:E} is not an analogy:
+$E$ is the $\{0,1\}$ Boltzmann Hamiltonian of the formalization~\citeref{hnbm} evaluated at the
+parameters \eqref{eq:WT}, so every statement that formalization proves about minimizing that
+Hamiltonian is a statement about $p$ --- and, by \thmref{thm:iff} below, about the chessboard.
+
+\begin{remark}[why the threshold is stored doubled]\label{rem:doubling}
+By \propref{prop:sizes} the degree is odd at every auxiliary neuron, at every corner carrying no
+given, and at every interior square carrying one, so $\theta_u = -\tfrac12\deg(u)$ is a
+half-integer at all of those. Storing $\theta$ directly in an integer array
+would silently restrict the encoding to even degrees; the development stores $2\theta_u = -\deg(u)$
+instead (\lstinline{problem_theta})\qsrc{Basic.lean}{475} and halves it once, where the real-valued
+energy is defined. The inner loop of the search
+consequently computes twice the local field $Wx - \theta$. This is invisible to the deterministic
+dynamics of \secref{sec:search} and not to the stochastic one; see \remref{rem:temperature}.
+\end{remark}
+
+\begin{figure}[H]
+\centering
+\begin{tabular}{@{}c@{\hspace{2.6em}}c@{}}
+\begin{qcpic}{0.62cm}
+  \qcboard{4}
+  \qcrule{cRow}{1}{0}{1}{3}
+  \qcrule{cCol}{0}{2}{3}{2}
+  \qcrule{cDiag}{0}{1}{2}{3}
+  \qcrule{cAnti}{0}{3}{3}{0}
+  \qcmark{1}{2}
+  \node[cRow,  font=\scriptsize] at (-0.45,-1.5) {$r_{1}$};
+  \node[cDiag, font=\scriptsize] at (1.5,0.34)   {$r_{9}$};
+  \node[cCol,  font=\scriptsize] at (2.5,0.34)   {$r_{6}$};
+  \node[cAnti, font=\scriptsize] at (3.5,0.34)   {$r_{15}$};
+\end{qcpic}
+&
+\begin{qcpic}{0.62cm}
+  \qcboard{4}
+  \qcrule{cRow}{0}{0}{0}{3}
+  \qcrule{cCol}{0}{0}{3}{0}
+  \qcrule{cDiag}{0}{0}{3}{3}
+  \qcmark{0}{0}
+  \draw[cAnti,densely dotted,line width=0.9pt] (0.5,-0.5) circle (0.36);
+  \node[cRow,  font=\scriptsize] at (-0.45,-0.5) {$r_{0}$};
+  \node[cCol,  font=\scriptsize] at (0.5,0.34)   {$r_{4}$};
+  \node[cDiag, font=\scriptsize] at (3.5,-4.45)  {$r_{10}$};
+  \node[cAnti, font=\scriptsize] at (-0.7,0.5)   {no row};
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) an interior square: $\deg = 4$} & \qclab{(b) a corner: $\deg = 3$}
+\end{tabular}
+\caption{The rows of $A$ through one square of the $4 \times 4$ board, on which $n = 26$ and
+$m = 18$. Each capsule is one equation of~\eqref{eq:form}, drawn through the squares whose neurons
+it contains: \textcolor{cRow}{board row}, \textcolor{cCol}{column}, \textcolor{cDiag}{diagonal},
+\textcolor{cAnti}{anti-diagonal}. (a) The square $(1,2)$ lies in $r_1$, $r_6$, $r_9$ and $r_{15}$.
+(b) The anti-diagonal through the corner $(0,0)$ is the single square $\{(0,0)\}$, drawn dotted,
+which generates no equation, so the corner lies in three rows only and its threshold is
+$-\tfrac32$.}\label{fig:inc}
+\end{figure}
+
+\section{What the translation is proved to do}\label{sec:proved}
+
+The translation of \secref{sec:qubo} is a definition, and by itself it establishes nothing: a
+network built from a problem by hand is only as good as the hand. If the construction is wrong then
+a correct descent returns a wrong answer, and a descent that finds nothing says nothing at all. The
+statements below are therefore proved rather than argued. \propref{prop:energy} has already
+identified the objective with the energy; what remains is to connect both to the chessboard.
+Throughout, the instance is assumed \emph{well formed}, meaning that every given lies on the board.
+
+Let $\mathrm{enc}$ (\lstinline{encode}\qsrc{Basic.lean}{935}) send a board $q$ to the point of
+$\{0,1\}^{n}$ setting $x_{i q_i}$ for each $i < N$, with each auxiliary neuron set exactly when its
+diagonal is empty, and let $\mathrm{dec}$ (\lstinline{decode}\qsrc{Basic.lean}{605}) send a point $x$
+to the array whose $i$-th entry is the least $j$ with $x_{ij} = 1$, or $N$ if there is none.
+
+\begin{theorem}[soundness and completeness]\label{thm:iff}
+Let $(N,G)$ be well formed. If $p(x) = 0$ then $\mathrm{dec}(x)$ is accepted by the checker
+(\lstinline{decode_isQueens}\qsrc{Basic.lean}{909}); and if a board $q$ is accepted by the checker then
+$p(\mathrm{enc}(q)) = 0$ (\lstinline{encode_penalty_zero}\qsrc{Basic.lean}{1179}). Consequently
+\[
+  \exists\, x \in \{0,1\}^{n}.\ p(x) = 0
+  \qquad\Longleftrightarrow\qquad
+  \exists\, q.\ q \text{ is a completion of } (N,G),
+\]
+the right-hand side being \defref{def:completion} by \thmref{thm:spec}
+(\lstinline{exists_zero_iff_completion})\qsrc{Spec.lean}{76}.
+\end{theorem}
+
+\begin{theorem}[the minimizers]\label{thm:min}
+Let $(N,G)$ be well formed. Then $E$ attains its minimum if and only if $(N,G)$ has a completion
+(\lstinline{exists_minEnergy_iff})\qsrc{Converge.lean}{139},
+and $\mathrm{dec}(x)$ is a completion for every $x$ attaining it
+(\lstinline{isQueens_decode_of_minEnergy}\qsrc{Converge.lean}{130}).
+\end{theorem}
+
+\begin{corollary}[low-temperature concentration]\label{cor:gibbs}
+Let $(N,G)$ be well formed and suppose it has a completion. Then the unique stationary distribution
+of the random-scan Gibbs chain of the network \eqref{eq:WT} at temperature $T$ gives the states with
+$p > 0$ a total mass that tends to $0$ as $T \to 0^{+}$
+(\lstinline{stationary_infeasible_tendsto_zero})\qusrc{Gibbs.lean}{365}.
+\end{corollary}
+
+\begin{remark}[on the hypotheses]\label{rem:hyp}
+Well-formedness (\lstinline{givensOk})\qsrc{Basic.lean}{626} is the only hypothesis, and it cannot be
+dropped: an off-board given contributes a
+row \eqref{eq:form-giv} containing no neuron at all, which no state satisfies, so $p$ would have no
+zero on an instance that may well have a completion. No lower bound on $N$ is assumed by
+\thmref{thm:iff} or \thmref{thm:min} --- at $N = 0$ there are no neurons and no rows, $p$ is an
+empty sum, and the empty board is vacuously a completion --- although \eqref{eq:sizes} needs
+$N \ge 2$. The hypothesis of \corref{cor:gibbs} is likewise not decoration: on a blocked instance no
+state attains $-\tfrac12 m$, and there is nothing for the mass to concentrate on. Note also that
+\corref{cor:gibbs} is a statement about the equilibrium distribution at a fixed temperature, not
+about any cooling schedule, and in particular not about the annealed run of \secref{sec:search}.
+\end{remark}
+
+\thmref{thm:iff} is stated against the checker and turned into a statement about chess by
+\thmref{thm:spec}, which is why that theorem was worth proving. The gap of $\tfrac12$ in
+\propref{prop:energy} is what makes the objective a decision procedure rather than an
+approximation: no state has energy merely close to the minimum, so a run ending above the minimum
+ends at least $\tfrac12$ above it, and there is nothing to be gained by reporting how close it came.
+
+\begin{remark}[the second half of \thmref{thm:min} does not reverse]\label{rem:slack}
+The auxiliary neurons are the reason. Decoding reads only the square neurons, so a state whose board
+decodes to a completion need not attain the minimum: on the empty $4 \times 4$ board, flipping one
+auxiliary bit of $\mathrm{enc}(1,3,0,2)$ leaves the decoded board unchanged while raising $p$ from
+$0$ to $1$. What \thmref{thm:iff} and \thmref{thm:min} give is an equivalence between the existence
+of a minimizer and the existence of a completion, together with soundness of each individual
+minimizer. That is what a search needs, since a search reports the state it stopped at. Like the
+last clause of \propref{prop:sizes}, this one-line computation is not in the development.
+\end{remark}
+
+\subsection*{Boards with no completion}
+
+Because \thmref{thm:iff} is an equivalence, the absence of a zero of $p$ is a statement about the
+board rather than about the search. On six of the seven blocked instances of \tabref{tab:blocked}
+that statement is proved, by exhausting the tuples the givens leave open using kernel reduction;
+\lstinline{native_decide} is not used, so no compiler is part of the trusted base.
+
+\figref{fig:hard} shows the two extremes. \texttt{Attack} needs no enumeration at all: its two
+givens share a diagonal, so the checker's diagonal clause refutes the board outright
+(\lstinline{attacking_no_queens}\qsrc{Examples.lean}{192}). \texttt{Blk7}
+is the instance worth noting. Its givens share no row, no column and no diagonal, so the placement
+is locally unobjectionable and no attack is displayed, and the board admits no completion regardless;
+this is the phenomenon that makes Completion hard rather than merely large. A check over
+$7^{5} = 16807$ tuples settles it (\lstinline{blk7_no_queens}\qsrc{Bench.lean}{388}), and by
+\thmref{thm:iff} the refutation extends to every one of the $2^{71}$ states of that instance
+(\lstinline{blk7_no_zero}\qsrc{Bench.lean}{403}). The seventh, \texttt{Blk8}, leaves $8^{6} = 262144$ tuples
+open, which is beyond what kernel reduction will do here; it is reported as an observation of the
+baseline rather than as a theorem, and \tabref{tab:blocked} marks it as such.
+
+\begin{figure}[H]
+\centering
+\begin{tabular}{@{}c@{\hspace{2.6em}}c@{}}
+\begin{qcpic}{0.46cm}
+  \qcboard{8}\qcattack{0}{0}{1}{1}\qcgivens{0/0,1/1}
+\end{qcpic}
+&
+\begin{qcpic}{0.46cm}
+  \qcboard{7}\qcgivens{0/0,1/6}
+\end{qcpic}
+\\[0.5em]
+\qclab{(a) \texttt{Attack}} & \qclab{(b) \texttt{Blk7}}
+\end{tabular}
+\caption{Two instances with no completion. (a) The two givens attack each other along a diagonal,
+shown the way the board widget shows it, and the checker refutes the board with no enumeration.
+(b) The givens of \texttt{Blk7} share no row, no column and no diagonal, so nothing is displayed and
+nothing is locally wrong; the board admits no completion all the same.}\label{fig:hard}
+\end{figure}
+
+\subsection*{Where the certification stops}
+
+The objective is identified with the energy by \propref{prop:energy}; the integer routine that computes
+the net input in the inner loop of the search is proved equal to twice the network's local field
+(\lstinline{netVec_eq_localField}\qusrc{Refine.lean}{256}), the factor of two being the one that lets
+$\theta$ be stored doubled; and the minimizers are
+characterized by \thmref{thm:min}. The \emph{trajectory} is not certified, and it departs from the
+certified dynamics in two independent ways. The recurrences of \secref{sec:search} accumulate their
+net input over time, and the accumulated $u$ is not the local field of the current state --- the two
+coincide only at $t = 0$; and the update is synchronous, whereas every convergence, Lyapunov and
+detailed-balance result of~\citeref{hnbm} is stated for the single-site update. The second gap can
+be closed on its own: the development implements an asynchronous variant, which is the one the
+theory covers, at the cost of a slower cooling schedule and roughly three times the wall clock. The
+first cannot, so even that variant would not be the dynamics of~\citeref{hnbm}. Convergence of
+\eqref{eq:dyn} to local optima is asserted in~\citeref{liwang2022} on the strength of simulation,
+and remains unproved here.
+
+What a run of \secref{sec:search} establishes when it succeeds is therefore a theorem about the
+board; what it establishes when it fails is nothing, and the negative results above come from
+enumeration instead.
+
+
+\section{The collaborative search}\label{sec:search}
+
+A single Hopfield network stops at the first state that no single update improves, which on these
+instances is almost never a minimum. Collaborative neurodynamic
+optimization~\citeref{che2019} improves on it by running a population of networks concurrently and
+re-initializing their states by a particle swarm rule~\citeref{kennedy1995}, and it is the
+scheme of~\citeref{liwang2022} that we apply here, unchanged in structure.
+
+Two recurrences are used, both driven by the same accumulated net input. Starting from a seed
+$x(0)$ and $u(0) = 0$,
+\begin{subequations}\label{eq:dyn}
+\begin{align}
+  u(t+1) &= u(t) + Wx(t) - \theta, \label{eq:dyn-u}\\
+  x_i(t+1) &= \begin{cases} 1 & \text{if } u_i(t+1) > 0,\\ 0 & \text{otherwise,}\end{cases}
+    \label{eq:dyn-dhnm}\\
+  \Pr\bigl[x_i(t+1) = 1\bigr] &= \bigl(1 + e^{-u_i(t+1)/T(t)}\bigr)^{-1}, \label{eq:dyn-bmm}
+\end{align}
+\end{subequations}
+with $T(t) = T_0\eta^{t}$ a geometric cooling schedule over the sweeps of one run. A discrete
+Hopfield network with a momentum term (DHNm) is \eqref{eq:dyn-u} with \eqref{eq:dyn-dhnm}; a
+Boltzmann machine with one (BMm) is \eqref{eq:dyn-u} with \eqref{eq:dyn-bmm}. These are equations
+(3) and (6) of~\citeref{liwang2022}, whose equation (2) is the threshold \eqref{eq:dyn-dhnm}; in the
+development they are \lstinline{dhnmStep}\qusrc{Dynamics.lean}{179} and
+\lstinline{bmmStep}\qusrc{Dynamics.lean}{213}. Note
+that $u(t)$ is an
+accumulated field and not the local field of \secref{sec:qubo}: the two agree only at $t = 0$, where
+$u(1) = Wx(0) - \theta$. \figref{fig:alg} states the search around them (\lstinline{search}\qusrc{Search.lean}{171}). The only
+problem-specific input is the list of mutually exclusive neuron groups used at step 1, which here is
+the $N$ squares of each board row --- the rows \eqref{eq:form-row} of \figref{fig:inc}.
+
+\begin{remark}[three properties of \eqref{eq:dyn} worth stating]\label{rem:temperature}
+First, the update is \emph{synchronous}: every neuron is recomputed from $u(t+1)$ at once.
+\citeref{liwang2022} calls its models \enquote{activated synchronously}, but that phrase is about
+the population rather than the neurons within one network, so the reading is ours; the momentum
+term of \eqref{eq:dyn-u} is the classical device for taming the oscillation a synchronous update
+invites, which is the reading it supports. An asynchronous single-site variant is also
+implemented, and \secref{sec:proved} returns to what it would buy.
+
+Second, \eqref{eq:dyn-u} is an \emph{undamped} accumulator, so the recurrence need not converge and
+a synchronous update can fall into a $2$-cycle. Each inner run therefore returns the state it
+happens to end on after its fixed number of sweeps; the implementation can instead track the best
+state visited, but the runs of \secref{sec:search} do not, so the value reported for a copy is the
+value of its last state and not a minimum over its trajectory.
+
+Third, by \remref{rem:doubling} the inner loop computes $2(Wx - \theta)$, so the accumulator it
+carries is $2u$. The threshold test \eqref{eq:dyn-dhnm} is unaffected, since $2z > 0$ iff $z > 0$;
+the logistic of \eqref{eq:dyn-bmm} is not, and the implementation compensates by building its table
+at $2T_0$ (\lstinline{ModelConfig.tabulate}\qusrc{Dynamics.lean}{169}), so that the law it samples is
+exactly \eqref{eq:dyn-bmm} at $T(t)$. Getting this wrong anneals from $T_0/2$, which is why the
+development guards the two conventions against each other.
+\end{remark}
+
+\begin{figure}[H]
+\centering\small
+\setlength{\tabcolsep}{0pt}
+\begin{tabular}{@{}p{0.965\textwidth}@{}}
+\toprule
+\textbf{The collaborative search} (Algorithm 2 of~\citeref{liwang2022}), as applied
+to~\eqref{eq:form}.\\
+\midrule
+\textbf{Input:} the network $(W,\theta)$ of~\eqref{eq:WT}; a model $\mathcal{M} \in
+\{\text{DHNm},\ \text{BMm}\}$; and $K$, $M$, $c_0$, $c_1$, $c_2$, $P_m$, $\mathcal{T}$, $T_0$,
+$\eta$.\\
+\textbf{Output:} the incumbent $x^{*}$ and its objective value $p(x^{*})$.\\
+\midrule
+\emph{1} \quad draw $x^{(i)}(0)$ with one neuron set in each board row, $v^{(i)} \sim U[-1,1]^{n}$;
+set $\hat x^{(i)} \leftarrow x^{(i)}(0)$ and $x^{*} \leftarrow \arg\min_i p(\hat x^{(i)})$\\
+\emph{2--7} \quad\, \textbf{repeat:} run each of the $K$ copies of $\mathcal{M}$ from $x^{(i)}(0)$
+for a fixed number of sweeps of~\eqref{eq:dyn}, giving $x^{(i)}$; set
+$\hat x^{(i)} \leftarrow x^{(i)}$ whenever $p(x^{(i)}) < p(\hat x^{(i)})$\\
+\emph{8--14} \quad $x^{*} \leftarrow \arg\min_i p(\hat x^{(i)})$ if that improves on $x^{*}$, and
+reset the stall counter; otherwise increment it. Exit if $p(x^{*}) = 0$\\
+\emph{15--20} \, $v^{(i)} \leftarrow c_0 v^{(i)} + c_1 r_1 (\hat x^{(i)} - x^{(i)})
++ c_2 r_2 (x^{*} - x^{(i)})$ with $r_1, r_2 \sim U[0,1]$, then
+$x^{(i)}(0) \leftarrow \mathrm{round}\bigl(x^{(i)}(0) + v^{(i)}\bigr)$\\
+\emph{21--24} \, $\delta \leftarrow \frac{1}{Kn}\sum_i \lVert \hat x^{(i)} - x^{*}\rVert_2$;
+\ \textbf{if} $\delta\sqrt{n} < \mathcal{T}$ \textbf{then} flip each bit of every $x^{(i)}(0)$ with
+probability $P_m$\\
+\quad\ \ \ \ \ \ \ \, \textbf{until} $p(x^{*}) = 0$, or the stall counter exceeds $M$, or the round
+cap is reached\\
+\bottomrule
+\end{tabular}
+\caption{The search, with the step numbers of~\citeref{liwang2022}; steps 15--20 are its equation
+(7), the diversity of step 21 its equation (8), and the mutation of step 23 its equation (9). Four
+points a literal reading does not settle are resolved here and flagged rather than hidden: the
+one-hot draw at step 1; the $\sqrt{n}$ at step 22; the target of the mutation at step 23; and the
+reading of step 16, whose equation (7) we take with the current position as the just-computed
+equilibrium $x^{(i)}$ and with $\hat x^{(i)}$ as the personal best, so that both the cognitive and
+the social term are measured from the equilibrium. All four are discussed below. Note that (8) uses
+$\lVert\cdot\rVert_2$ unsquared, so each term is the square root of a Hamming
+distance.}\label{fig:alg}
+\end{figure}
+
+\subsection*{Parameters}
+
+Running the search requires a numerical value for every parameter in \tabref{tab:params}. For eight
+of them --- $T_0$, $\eta$, the inner-iteration count, $P_m$, $\mathcal{T}$ and the swarm constants
+$c_0$, $c_1$, $c_2$ --- \citeref{liwang2022} gives no numerical value anywhere, so all eight were
+recovered experimentally; the population size, the stall limit and the round cap are the settings
+used here. Two of the recovered eight are not merely a matter of tuning.
+
+The social coefficient $c_2$ weights the pull of the incumbent. If it is comparable to $c_1$ then
+every copy is drawn onto $x^{*}$, and once $x^{*}$ lies on a plateau --- which on these instances
+happens almost at once --- the population stops exploring, and further copies are further copies of
+the same stuck point. Taking $c_2$ well below $c_1$ removes this. The diversity threshold
+$\mathcal{T}$ has to be made scale-free: the diversity measure of~\citeref{liwang2022} is an average
+of Euclidean distances divided by the number of neurons, hence at most $1/\sqrt{n}$, so a fixed
+threshold means something different on every instance and on a large one fires every round. We
+compare it against the diversity scaled by $\sqrt{n}$, as step 22 of \figref{fig:alg} records. The
+recovered value is model-specific, and it transfers: on the empty $8 \times 8$ board DHNm succeeds
+on four of ten seeds at BMm's $0.4$ against nine of ten at its own $0.9$.
+
+Three further choices are interpretations rather than numbers. Step 1 of~\citeref{liwang2022} says
+only that the initial state is binary; uniform bits set about half the neurons, whereas a feasible
+point sets exactly one per board row, so a uniformly seeded run spends its whole equilibration
+merely reaching one queen per row. Seeding one-hot starts every copy on the feasible set
+of~\eqref{eq:form-row} and leaves the dynamics the columns and the diagonals. Step 23 says only to
+mutate, without naming the target; we mutate the seeds $x^{(i)}(0)$, never $x^{*}$, since mutating
+the incumbent would forfeit the best board found. And step 16 writes its two difference terms
+against \enquote{the $i$-th particle}, which the surrounding steps use for both the equilibrium
+state and the personal best; we read the base point as the equilibrium and the cognitive target as
+the personal best, as \figref{fig:alg} records.
+
+\begin{table}[H]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}l p{0.44\textwidth} l@{}}
+\toprule
+& meaning & value\\
+\midrule
+$K$            & population size                                     & $20$\\
+$M$            & stall limit, in rounds                              & $20$\\
+               & round cap                                           & $60$\\
+               & inner iterations per equilibration                  & $40$\\
+$T_0$          & initial temperature                                 & $3.0$\\
+$\eta$         & cooling rate                                        & $0.9$\\
+$c_0$          & inertia weight                                      & $0.5$\\
+$c_1$          & cognitive coefficient                               & $2.0$\\
+$c_2$          & social coefficient                                  & $0.25$\\
+$P_m$          & bit-flip mutation probability                       & $0.05$\\
+$\mathcal{T}$  & diversity threshold, as a fraction of $\delta_{\max} = 1/\sqrt{n}$
+               & $0.4$ (BMm), $0.9$ (DHNm)\\
+\bottomrule
+\end{tabular}
+\caption{The parameters of \figref{fig:alg}, used for every collaborative run in
+\tabref{tab:results} and \tabref{tab:blocked}, and collected in
+\texttt{SearchConfig}\qusrc{Search.lean}{61}. The eight named in \secref{sec:search} are given no
+numerical value anywhere in~\citeref{liwang2022} and were recovered
+experimentally.}\label{tab:params}
+\end{table}
+
+\subsection*{Results}
+
+The parameters are fixed across every instance and so is the base seed. The generator is
+\texttt{splitmix64} and no clock is read, so both tables are reproducible exactly. The baseline is a
+chronological backtracking completion search written independently of the encoding. It is itself
+certified, in that every board it returns is proved to satisfy the checker
+(\lstinline{solve_isQueens}\qsrc{Baseline.lean}{223}), and the column \textsf{ok} of
+\tabref{tab:results} is that theorem being re-checked at run time; the converse is
+not proved, so the baseline's failures would be observations, and it has none.
+
+\begin{table}[H]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrrrr rr rrr r r@{}}
+\toprule
+& & & & & \multicolumn{2}{c}{backtr.}
+& \multicolumn{3}{c}{CNS/BMm} & DHNm & 1 BMm\\
+\cmidrule(lr){6-7}\cmidrule(lr){8-10}\cmidrule(lr){11-11}\cmidrule(lr){12-12}
+board & $N$ & $|G|$ & $n$ & $m$ & ok & \#compl. & hit & rounds & $s/k$ & $s/k$ & $s/20$\\
+\midrule
+\texttt{Q4}     & 4  & 0 & 26  & 18 & y & 2   & y & 1  & 10/10 & 10/10 & 7\\
+\texttt{Q5}     & 5  & 0 & 39  & 24 & y & 10  & y & 1  & 10/10 & 10/10 & 5\\
+\texttt{Q6}     & 6  & 0 & 54  & 30 & y & 4   & y & 4  & 9/10  & 8/10  & 0\\
+\texttt{Q7}     & 7  & 0 & 71  & 36 & y & 40  & y & 10 & 10/10 & 10/10 & 0\\
+\texttt{Q8}     & 8  & 0 & 90  & 42 & y & 92  & y & 3  & 10/10 & 9/10  & 0\\
+\texttt{Q9}     & 9  & 0 & 111 & 48 & y & 352 & y & 24 & 4/5   & 5/5   & 0\\
+\texttt{Q10}    & 10 & 0 & 134 & 54 & y & 724 & n & 31 & 0/5   & 1/5   & 0\\
+\midrule
+\texttt{Comp6}  & 6  & 1 & 54  & 31 & y & 1   & n & 22 & 6/10  & 7/10  & 0\\
+\texttt{Comp7}  & 7  & 1 & 71  & 37 & y & 4   & y & 8  & 10/10 & 6/10  & 0\\
+\texttt{Comp8}  & 8  & 3 & 90  & 45 & y & 1   & y & 14 & 6/10  & 3/10  & 0\\
+\texttt{Comp8b} & 8  & 5 & 90  & 47 & y & 1   & y & 4  & 10/10 & 10/10 & 0\\
+\bottomrule
+\end{tabular}
+\caption{The eleven completable instances. Columns: board size; number of givens; the neuron and row
+counts $n$ and $m$ of~\eqref{eq:sizes}; whether the checker accepts the board backtracking returned;
+the total number of completions; whether the collaborative search driving BMm reached $p = 0$ at the
+base seed, and in how many rounds; its successes over $k$ seeds; the same driving DHNm; and
+successes over $20$ seeds for a single BMm run with no population at all. That last run is one
+annealed pass of~\eqref{eq:dyn}, $400$ sweeps at $T = 3.0 \cdot 0.99^{t}$ from the same base seed,
+and is the one configuration here not covered by \tabref{tab:params}. Backtracking found a
+completion on every row. The table is printed by
+\texttt{Bench.table}\qsrc{Bench.lean}{247}.}\label{tab:results}
+\end{table}
+
+\begin{table}[H]
+\centering\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}lrrrr rr rr@{}}
+\toprule
+board & $N$ & $|G|$ & $n$ & $m$ & \#compl. & refuted & tuples & best $p$\\
+\midrule
+\texttt{Q2}     & 2 & 0 & 6  & 6  & 0 & y & $2^2 = 4$      & 1\\
+\texttt{Q3}     & 3 & 0 & 15 & 12 & 0 & y & $3^3 = 27$     & 1\\
+\texttt{Blk4}   & 4 & 1 & 26 & 19 & 0 & y & $4^3 = 64$     & 1\\
+\texttt{Blk6}   & 6 & 1 & 54 & 31 & 0 & y & $6^5 = 7776$   & 1\\
+\texttt{Blk7}   & 7 & 2 & 71 & 38 & 0 & y & $7^5 = 16807$  & 1\\
+\texttt{Attack} & 8 & 2 & 90 & 44 & 0 & y & none needed    & 1\\
+\texttt{Blk8}   & 8 & 2 & 90 & 44 & 0 & n & $8^6 = 262144$ & 1\\
+\bottomrule
+\end{tabular}
+\caption{The seven blocked instances. \textsf{refuted} is whether the absence of a completion is a
+theorem of the development rather than a verdict of the baseline; \textsf{tuples} is the enumeration
+that establishes it, over the rows the givens leave open. On every row the search found no zero on
+any seed, and its best value was exactly $1$, the least it can be by \propref{prop:energy}. The
+table is printed by \texttt{Bench.tableBlocked}\qsrc{Bench.lean}{292}.}\label{tab:blocked}
+\end{table}
+
+Four things are worth drawing out of the two tables.
+
+\emph{1) The baseline wins.} Backtracking solves every completable instance and refutes every
+blocked one, in times not worth tabulating. No speed claim is made for the neurodynamic algorithms
+and nothing here should be read as one.
+
+\emph{2) The population is not a refinement but the difference between working and not working.} A
+single BMm run with no population succeeds on $7$ of $20$ seeds at $N = 4$ and $5$ of $20$ at
+$N = 5$, and on nothing from $N = 6$ upwards or on any instance with givens. The collaborative
+search reaches a completion on ten of the eleven rows under BMm and on all eleven under DHNm.
+
+\emph{3) The two models separate, and only where there are givens.} On the seven empty boards DHNm
+and BMm are indistinguishable, at $53$ of $60$ seeds each. On the four boards with givens BMm is
+ahead, $32$ of $40$ against $26$. The separation is not uniform --- DHNm is the only configuration to
+reach $N = 10$ at all, once in five seeds --- and it is problem-specific: on a graph-colouring corpus
+encoded in the same framework the two are indistinguishable throughout.
+
+\emph{4) The corpus is what bounds the claim.} $N = 10$ is the edge: BMm fails on it on every seed
+and DHNm succeeds on one of five, and nothing larger was run. A purpose-built Hopfield network for
+$n$-queens~\citeref{mandziuk1995} reaches $N = 80$, on the plain problem rather than on Completion.
+
+Finally, a word on what is not reported. It is usual to give the best and worst objective values
+over runs with their mean and standard deviation. That statistic is uninformative here: by
+\propref{prop:energy} the objective is integer-valued with a gap of $\tfrac12$ in the energy, so a run
+ends either at $p = 0$ or at $p \ge 1$, and on every blocked instance every failed run ends at
+exactly $1$, as the last column of \tabref{tab:blocked} records. A mean over runs would report
+little beyond the success rate, which is given directly, and a standard deviation would report the
+same thing twice.
+
+\section{Concluding remarks}\label{sec:concl}
+
+We have presented a straightforward translation of an $n$-Queens Completion instance into the energy
+of a $\{0,1\}$ Boltzmann machine, and certified it. The translation is parametric in $N$ and
+polynomial in the size of the board --- $N^{2} + 4N - 6$ neurons and $6N - 6 + |G|$ rows --- and
+since Completion is \textsf{NP}-complete~\citeref{gent2017}, no algorithm with better complexity is
+known. Collaborative neurodynamic algorithms then apply to it without modification, and on eleven
+completable instances they find a completion on all but one.
+
+The translation can also be used to enumerate: the certified baseline counts the completions of
+every instance (\lstinline{count}\qsrc{Baseline.lean}{84}), and on the empty boards it returns $1, 1, 0, 0, 2, 10, 4, 40, 92, 352, 724$ for
+$N = 0,\dots,10$, the classical sequence~\citeref{oeis170}. That count is a cross-check on the baseline rather than a
+theorem about it --- what is proved is that every board it returns is a completion, not that it
+returns them all.
+
+Particularly worth remarking is how little of this was implementation effort. The energy, the
+network, both recurrences of~\eqref{eq:dyn}, the collaborative search and the whole minimizer theory
+came from the existing formalization~\citeref{hnbm} unchanged; only the constraints~\eqref{eq:form}
+had to be specified, in about a hundred and fifty lines. The proof that those constraints say what
+they appear to say is the rest of the development, and it is not small. That asymmetry is the point:
+what the proof buys is not speed --- backtracking outperforms the neurodynamic algorithms on every
+instance, and a purpose-built network~\citeref{mandziuk1995} outperforms them at sizes this encoding
+does not reach --- but the guarantee that a run which ends at the minimum has established a property
+of the chessboard, and that the objective being descended is provably the energy of the network said
+to be descending it.
+
+Two directions remain. The trajectory is not certified, as \secref{sec:proved} sets out: the
+recurrences~\eqref{eq:dyn} accumulate their net input and update synchronously, and so are not the
+single-site dynamics for which convergence is proved. Switching to the asynchronous variant already
+implemented would close the second gap but not the first; a solver restricted to single-site
+updates \emph{without} the momentum term would be certified from the board to the last update, and
+would be a different algorithm from the one~\citeref{liwang2022} proposes. And the variable-reduction stage of~\citeref{liwang2022},
+which fixes the neurons the givens determine before the search begins, has no counterpart here: every
+result above is obtained on the full $N^{2} + 4N - 6$ neurons. An analogue exists in principle,
+since a row or column left with a single square unattacked by a given must carry a queen there. Until
+it is implemented and certified, the results here and those of~\citeref{liwang2022} are not
+comparable in either direction.
+
+\section*{Acknowledgements}
+% TODO
+
+\begin{thebibliography}{99}
+
+\bibitem{hopfield1982}
+J.~J.~Hopfield.
+\newblock Neural networks and physical systems with emergent collective computational abilities.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 79(8):2554--2558, 1982.
+
+\bibitem{ackley1985}
+D.~H.~Ackley, G.~E.~Hinton, and T.~J.~Sejnowski.
+\newblock A learning algorithm for Boltzmann machines.
+\newblock \emph{Cognitive Science}, 9(1):147--169, 1985.
+
+\bibitem{liwang2022}
+H.~Li and J.~Wang.
+\newblock Collaborative neurodynamic algorithms for solving Sudoku puzzles.
+\newblock In \emph{12th International Conference on Information Science and Technology (ICIST)},
+pages 8--17. IEEE, 2022.
+
+\bibitem{bell2009}
+J.~Bell and B.~Stevens.
+\newblock A survey of known results and research areas for $n$-queens.
+\newblock \emph{Discrete Mathematics}, 309(1):1--31, 2009.
+
+\bibitem{kennedy1995}
+J.~Kennedy and R.~Eberhart.
+\newblock Particle swarm optimization.
+\newblock In \emph{Proceedings of the IEEE International Conference on Neural Networks}, volume 4,
+pages 1942--1948, 1995.
+
+\bibitem{che2019}
+H.~Che and J.~Wang.
+\newblock A collaborative neurodynamic approach to global and combinatorial optimization.
+\newblock \emph{Neural Networks}, 114:15--27, 2019.
+
+\bibitem{hnbm}
+M.~Cipollina, M.~Karatarakis, and F.~Wiedijk.
+\newblock Formalized Hopfield networks and Boltzmann machines.
+\newblock In \emph{LPAR-26}, EPiC Series in Computing, 2026. To appear. arXiv:2512.07766.
+
+\bibitem{lean4}
+L.~de~Moura and S.~Ullrich.
+\newblock The Lean 4 theorem prover and programming language.
+\newblock In \emph{CADE-28}, volume 12699 of \emph{Lecture Notes in Computer Science}, pages
+625--635. Springer, 2021.
+
+\bibitem{gent2017}
+I.~P.~Gent, C.~Jefferson, and P.~Nightingale.
+\newblock Complexity of $n$-Queens Completion.
+\newblock \emph{Journal of Artificial Intelligence Research}, 59:815--848, 2017.
+
+\bibitem{mandziuk1995}
+J.~Ma\'{n}dziuk.
+\newblock Solving the $N$-Queens problem with a binary Hopfield-type network.
+\newblock \emph{Biological Cybernetics}, 72:439--445, 1995.
+
+\bibitem{lucas2014}
+A.~Lucas.
+\newblock Ising formulations of many NP problems.
+\newblock \emph{Frontiers in Physics}, 2:5, 2014.
+
+\bibitem{glover2019}
+F.~Glover, G.~Kochenberger, and Y.~Du.
+\newblock Quantum bridge analytics I: a tutorial on formulating and using QUBO models.
+\newblock arXiv:1811.11538, 2019.
+
+\bibitem{oeis170}
+OEIS Foundation Inc.
+\newblock Sequence A000170: number of ways of placing $n$ non-attacking queens on an
+$n \times n$ board.
+\newblock \emph{The On-Line Encyclopedia of Integer Sequences}, 2026.
+\url{https://oeis.org/A000170}.
+
+\end{thebibliography}
+
+\end{document}
